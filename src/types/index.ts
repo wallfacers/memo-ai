@@ -9,6 +9,7 @@ export interface Meeting {
   summary: string | null;
   report: string | null;
   audio_path: string | null;
+  auto_titled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -64,4 +65,5 @@ export interface PipelineResult {
   summary: string;
   action_items: ActionItem[];
   report: string;
+  generated_title?: string;
 }

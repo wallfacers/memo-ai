@@ -34,10 +34,11 @@ export function Sidebar() {
   }, [listMeetings, setMeetings, setError]);
 
   async function createMeeting() {
+    const autoTitled = newTitle.trim() === "";
     const title = newTitle.trim() || `会议 ${new Date().toLocaleString("zh-CN")}`;
     try {
       setCreating(true);
-      const meeting = await createMeetingCmd(title);
+      const meeting = await createMeetingCmd(title, autoTitled);
       setMeetings([meeting, ...useMeetingStore.getState().meetings]);
       setNewTitle("");
       navigate(`/meeting/${meeting.id}`);

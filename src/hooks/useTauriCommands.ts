@@ -11,7 +11,8 @@ export function useGetMeeting() {
 }
 
 export function useCreateMeeting() {
-  return (title: string) => invoke<Meeting>("create_meeting", { title });
+  return (title: string, autoTitled: boolean = false) =>
+    invoke<Meeting>("create_meeting", { title, autoTitled });
 }
 
 export function useDeleteMeeting() {

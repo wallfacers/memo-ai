@@ -14,6 +14,7 @@ pub struct Meeting {
     pub summary: Option<String>,
     pub report: Option<String>,
     pub audio_path: Option<String>,
+    pub auto_titled: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -55,6 +56,7 @@ pub struct MeetingStructure {
 // ─── Meeting CRUD ─────────────────────────────────────────────────────────────
 
 fn row_to_meeting(row: &Row<'_>) -> rusqlite::Result<Meeting> {
+    let auto_titled_int: i64 = row.get(8)?;
     Ok(Meeting {
         id: row.get(0)?,
         title: row.get(1)?,
@@ -64,24 +66,34 @@ fn row_to_meeting(row: &Row<'_>) -> rusqlite::Result<Meeting> {
         summary: row.get(5)?,
         report: row.get(6)?,
         audio_path: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
+        auto_titled: auto_titled_int != 0,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
-pub fn create_meeting(conn: &Connection, title: &str) -> AppResult<Meeting> {
+pub fn create_meeting(conn: &Connection, title: &str, auto_titled: bool) -> AppResult<Meeting> {
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
-        "INSERT INTO meetings (title, start_time, status, created_at, updated_at) VALUES (?1, ?2, 'idle', ?2, ?2)",
-        params![title, now],
+        "INSERT INTO meetings (title, start_time, status, auto_titled, created_at, updated_at) VALUES (?1, ?2, 'idle', ?3, ?2, ?2)",
+        params![title, now, auto_titled as i64],
     )?;
     let id = conn.last_insert_rowid();
     get_meeting(conn, id)
 }
 
+pub fn update_meeting_title(conn: &Connection, id: i64, title: &str) -> AppResult<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE meetings SET title = ?1, auto_titled = 0, updated_at = ?2 WHERE id = ?3",
+        params![title, now, id],
+    )?;
+    Ok(())
+}
+
 pub fn get_meeting(conn: &Connection, id: i64) -> AppResult<Meeting> {
     let meeting = conn.query_row(
-        "SELECT id, title, start_time, end_time, status, summary, report, audio_path, created_at, updated_at FROM meetings WHERE id = ?1",
+        "SELECT id, title, start_time, end_time, status, summary, report, audio_path, auto_titled, created_at, updated_at FROM meetings WHERE id = ?1",
         params![id],
         row_to_meeting,
     )?;
@@ -90,7 +102,7 @@ pub fn get_meeting(conn: &Connection, id: i64) -> AppResult<Meeting> {
 
 pub fn list_meetings(conn: &Connection) -> AppResult<Vec<Meeting>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, start_time, end_time, status, summary, report, audio_path, created_at, updated_at FROM meetings ORDER BY created_at DESC"
+        "SELECT id, title, start_time, end_time, status, summary, report, audio_path, auto_titled, created_at, updated_at FROM meetings ORDER BY created_at DESC"
     )?;
     let rows = stmt.query_map([], row_to_meeting)?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)

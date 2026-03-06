@@ -8,6 +8,7 @@ import {
   useTranscribeAudio,
   useRunPipeline,
   useUpdateActionItemStatus,
+  useListMeetings,
 } from "@/hooks/useTauriCommands";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordButton } from "@/components/RecordButton";
@@ -40,6 +41,7 @@ export function Meeting() {
     actionItems,
     setActionItems,
     setCurrentMeetingStatus,
+    setMeetings,
   } = useMeetingStore();
 
   const { isRecording, error, startRecording, stopRecording } = useRecording(meetingId);
@@ -49,6 +51,7 @@ export function Meeting() {
   const transcribeAudio = useTranscribeAudio();
   const runPipeline = useRunPipeline();
   const updateActionItemStatus = useUpdateActionItemStatus();
+  const listMeetings = useListMeetings();
 
   async function loadMeeting() {
     const meeting = await getMeeting(meetingId!);
@@ -96,6 +99,9 @@ export function Meeting() {
       await runPipeline(meetingId);
       await loadMeeting();
       await loadActionItems();
+      // Refresh sidebar meeting list so any AI-generated title is visible
+      const updatedMeetings = await listMeetings();
+      setMeetings(updatedMeetings);
       setCurrentMeetingStatus("completed");
     } catch (e) {
       console.error("Processing failed:", e);

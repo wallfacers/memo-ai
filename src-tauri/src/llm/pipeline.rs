@@ -26,6 +26,7 @@ pub struct PipelineOutput {
     pub summary: String,
     pub action_items: Vec<ActionItemRaw>,
     pub report: String,
+    pub generated_title: Option<String>,
 }
 
 pub struct Pipeline<'a> {
@@ -107,8 +108,17 @@ impl<'a> Pipeline<'a> {
         self.client.complete(&prompt)
     }
 
-    /// Run the full 6-stage pipeline.
-    pub fn run(&self, raw_transcript: &str) -> AppResult<PipelineOutput> {
+    /// Stage 7: Generate meeting title from summary.
+    pub fn stage7_title(&self, summary: &str) -> AppResult<String> {
+        let template = self.load_prompt("07_title.txt")?;
+        let prompt = Self::fill_template(&template, "summary", summary);
+        log::info!("Running pipeline stage 7: title generation");
+        let title = self.client.complete(&prompt)?;
+        Ok(title.trim().to_string())
+    }
+
+    /// Run the full pipeline (stages 1-6, plus optional stage 7 if auto_titled).
+    pub fn run(&self, raw_transcript: &str, auto_titled: bool) -> AppResult<PipelineOutput> {
         let clean = self.stage1_clean(raw_transcript)?;
         let organized = self.stage2_speaker(&clean)?;
         let structure = self.stage3_structure(&organized)?;
@@ -117,12 +127,25 @@ impl<'a> Pipeline<'a> {
         let actions_json = serde_json::to_string(&action_items)?;
         let report = self.stage6_report(&summary, &actions_json)?;
 
+        let generated_title = if auto_titled {
+            match self.stage7_title(&summary) {
+                Ok(t) => Some(t),
+                Err(e) => {
+                    log::warn!("Stage 7 title generation failed: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Ok(PipelineOutput {
             clean_transcript: clean,
             structure,
             summary,
             action_items,
             report,
+            generated_title,
         })
     }
 }

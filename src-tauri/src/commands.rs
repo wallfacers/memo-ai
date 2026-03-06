@@ -69,9 +69,13 @@ pub fn get_meeting(id: i64, db: State<'_, DbState>) -> Result<Meeting, String> {
 }
 
 #[tauri::command]
-pub fn create_meeting(title: String, db: State<'_, DbState>) -> Result<Meeting, String> {
+pub fn create_meeting(
+    title: String,
+    auto_titled: bool,
+    db: State<'_, DbState>,
+) -> Result<Meeting, String> {
     let conn = (*db).0.lock().unwrap();
-    models::create_meeting(&conn, &title).map_err(|e| e.to_string())
+    models::create_meeting(&conn, &title, auto_titled).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -183,6 +187,7 @@ pub struct PipelineResult {
     pub clean_transcript: String,
     pub summary: String,
     pub report: String,
+    pub generated_title: Option<String>,
 }
 
 #[tauri::command]
@@ -236,8 +241,15 @@ pub fn run_pipeline(
         return Err("No transcript available to process".into());
     }
 
+    let auto_titled = {
+        let conn = (*db).0.lock().unwrap();
+        models::get_meeting(&conn, meeting_id)
+            .map(|m| m.auto_titled)
+            .unwrap_or(false)
+    };
+
     let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
-    let output = pipeline.run(&transcript_text).map_err(|e| e.to_string())?;
+    let output = pipeline.run(&transcript_text, auto_titled).map_err(|e| e.to_string())?;
 
     // Save action items
     {
@@ -270,10 +282,18 @@ pub fn run_pipeline(
             .map_err(|e| e.to_string())?;
     }
 
+    // Update title if AI generated one
+    if let Some(ref title) = output.generated_title {
+        let conn = (*db).0.lock().unwrap();
+        models::update_meeting_title(&conn, meeting_id, title)
+            .map_err(|e| e.to_string())?;
+    }
+
     Ok(PipelineResult {
         clean_transcript: output.clean_transcript,
         summary: output.summary,
         report: output.report,
+        generated_title: output.generated_title,
     })
 }
 
