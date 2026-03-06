@@ -23,8 +23,8 @@ export function TranscriptView({ transcripts }: TranscriptViewProps) {
   }
 
   return (
-    <ScrollArea className="h-[400px] pr-3">
-      <div className="flex flex-col gap-3">
+    <ScrollArea className="h-[400px]">
+      <div className="flex flex-col gap-3 pr-3">
         {transcripts.map((t) => (
           <div key={t.id} className="flex gap-3">
             <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-muted-foreground w-10">
