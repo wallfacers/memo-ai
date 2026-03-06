@@ -126,11 +126,11 @@
 /* ── Memo AI 扩展变量 ── */
 @layer base {
   :root {
-    --sidebar-background: 0 0% 100%;
+    --sidebar-background: oklch(1 0 0);
   }
 
   .dark {
-    --sidebar-background: 222 84% 5%;
+    --sidebar-background: oklch(0.09 0.025 264);
   }
 }
 
