@@ -1,11 +1,26 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { useSettingsStore } from "../store/settingsStore";
-import type { AppSettings } from "../types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { useSettingsStore } from "@/store/settingsStore";
+import type { AppSettings } from "@/types";
+import { Check } from "lucide-react";
 
 export function Settings() {
-  const navigate = useNavigate();
   const { settings, setSettings } = useSettingsStore();
   const [local, setLocal] = useState<AppSettings>(settings);
   const [saved, setSaved] = useState(false);
@@ -17,7 +32,7 @@ export function Settings() {
         setLocal(s);
       })
       .catch(() => {});
-  }, []);
+  }, [setSettings]);
 
   async function handleSave() {
     try {
@@ -30,138 +45,135 @@ export function Settings() {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "8px 12px",
-    border: "1px solid #d1d5db",
-    borderRadius: 6,
-    fontSize: 14,
-    boxSizing: "border-box",
-    outline: "none",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#374151",
-    marginBottom: 6,
-  };
-
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto", padding: "32px 20px" }}>
-      <button
-        onClick={() => navigate("/")}
-        style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 14, marginBottom: 16, padding: 0 }}
-      >
-        ← 返回
-      </button>
-      <h2 style={{ margin: "0 0 28px", fontSize: 22, fontWeight: 700, color: "#1f2937" }}>设置</h2>
+    <div className="max-w-xl mx-auto px-6 py-8 space-y-6">
+      <h2 className="text-xl font-semibold text-foreground">设置</h2>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <section>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#374151", marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid #f3f4f6" }}>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             LLM 配置
-          </h3>
-
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Provider</label>
-            <select
+          </CardTitle>
+        </CardHeader>
+        <Separator />
+        <CardContent className="pt-4 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Provider</label>
+            <Select
               value={local.llm_provider.type}
-              onChange={(e) => setLocal({ ...local, llm_provider: { ...local.llm_provider, type: e.target.value as "ollama" | "openai" } })}
-              style={{ ...inputStyle, background: "#fff" }}
+              onValueChange={(v) =>
+                setLocal({
+                  ...local,
+                  llm_provider: { ...local.llm_provider, type: v as "ollama" | "openai" },
+                })
+              }
             >
-              <option value="ollama">Ollama（本地）</option>
-              <option value="openai">OpenAI</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ollama">Ollama（本地）</SelectItem>
+                <SelectItem value="openai">OpenAI</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Base URL</label>
-            <input
-              type="text"
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Base URL</label>
+            <Input
               value={local.llm_provider.base_url}
-              onChange={(e) => setLocal({ ...local, llm_provider: { ...local.llm_provider, base_url: e.target.value } })}
-              style={inputStyle}
+              onChange={(e) =>
+                setLocal({ ...local, llm_provider: { ...local.llm_provider, base_url: e.target.value } })
+              }
             />
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>模型</label>
-            <input
-              type="text"
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">模型</label>
+            <Input
               value={local.llm_provider.model}
-              onChange={(e) => setLocal({ ...local, llm_provider: { ...local.llm_provider, model: e.target.value } })}
-              style={inputStyle}
+              onChange={(e) =>
+                setLocal({ ...local, llm_provider: { ...local.llm_provider, model: e.target.value } })
+              }
               placeholder="llama3 / gpt-4o"
             />
           </div>
 
           {local.llm_provider.type === "openai" && (
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>API Key</label>
-              <input
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">API Key</label>
+              <Input
                 type="password"
                 value={local.llm_provider.api_key || ""}
-                onChange={(e) => setLocal({ ...local, llm_provider: { ...local.llm_provider, api_key: e.target.value || null } })}
-                style={inputStyle}
+                onChange={(e) =>
+                  setLocal({
+                    ...local,
+                    llm_provider: { ...local.llm_provider, api_key: e.target.value || null },
+                  })
+                }
                 placeholder="sk-..."
               />
             </div>
           )}
-        </section>
+        </CardContent>
+      </Card>
 
-        <section>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#374151", marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid #f3f4f6" }}>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             ASR 配置
-          </h3>
-
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Whisper 模型</label>
-            <select
+          </CardTitle>
+        </CardHeader>
+        <Separator />
+        <CardContent className="pt-4 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Whisper 模型</label>
+            <Select
               value={local.whisper_model}
-              onChange={(e) => setLocal({ ...local, whisper_model: e.target.value })}
-              style={{ ...inputStyle, background: "#fff" }}
+              onValueChange={(v) => setLocal({ ...local, whisper_model: v })}
             >
-              <option value="tiny">tiny（最快）</option>
-              <option value="base">base（推荐）</option>
-              <option value="small">small</option>
-              <option value="medium">medium</option>
-              <option value="large">large（最准）</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tiny">tiny（最快）</SelectItem>
+                <SelectItem value="base">base（推荐）</SelectItem>
+                <SelectItem value="small">small</SelectItem>
+                <SelectItem value="medium">medium</SelectItem>
+                <SelectItem value="large">large（最准）</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>识别语言</label>
-            <select
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">识别语言</label>
+            <Select
               value={local.language}
-              onChange={(e) => setLocal({ ...local, language: e.target.value })}
-              style={{ ...inputStyle, background: "#fff" }}
+              onValueChange={(v) => setLocal({ ...local, language: v })}
             >
-              <option value="zh">中文</option>
-              <option value="en">English</option>
-              <option value="auto">自动检测</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zh">中文</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="auto">自动检测</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </section>
+        </CardContent>
+      </Card>
 
-        <button
-          onClick={handleSave}
-          style={{
-            padding: "12px 24px",
-            background: saved ? "#10b981" : "#3b82f6",
-            color: "#fff",
-            border: "none",
-            borderRadius: 8,
-            cursor: "pointer",
-            fontSize: 15,
-            fontWeight: 500,
-            transition: "background 0.2s",
-          }}
-        >
-          {saved ? "✓ 已保存" : "保存设置"}
-        </button>
-      </div>
+      <Button onClick={handleSave} className="w-full" size="lg">
+        {saved ? (
+          <>
+            <Check className="mr-2 h-4 w-4" />
+            已保存
+          </>
+        ) : (
+          "保存设置"
+        )}
+      </Button>
     </div>
   );
 }
