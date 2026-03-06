@@ -236,18 +236,24 @@ pub fn run_pipeline(
     };
     let client = llm_config.build_client();
 
-    // Prompts directory — look next to the executable first, then use embedded path
+    // Prompts directory resolution (in priority order):
+    // 1. <exe>/prompts  — production bundle
+    // 2. <CARGO_MANIFEST_DIR>/../prompts — dev mode (cargo run / tauri dev)
+    // 3. prompts — last-resort relative fallback
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| PathBuf::from("."));
-    let prompts_dir = exe_dir.join("prompts");
-
-    // Fallback to dev path
-    let prompts_dir = if prompts_dir.exists() {
-        prompts_dir
-    } else {
-        PathBuf::from("prompts")
+    let prompts_dir = {
+        let exe_adjacent = exe_dir.join("prompts");
+        let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("prompts");
+        if exe_adjacent.exists() {
+            exe_adjacent
+        } else if dev_path.exists() {
+            dev_path
+        } else {
+            PathBuf::from("prompts")
+        }
     };
 
     // Collect transcript text
