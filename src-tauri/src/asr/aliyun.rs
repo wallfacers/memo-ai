@@ -59,9 +59,10 @@ impl AliyunAsr {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
+            let safe_body = if body.len() > 200 { &body[..200] } else { &body };
             return Err(AppError::Asr(format!(
                 "Aliyun token error HTTP {}: {}",
-                status, body
+                status, safe_body
             )));
         }
 
@@ -113,7 +114,8 @@ impl AsrProvider for AliyunAsr {
 
         let url = format!(
             "https://nls-gateway.cn-shanghai.aliyuncs.com/api/v1/recognition/flash?appkey={}&format={}&sample_rate=16000",
-            self.app_key, format
+            url_encode(&self.app_key),
+            url_encode(format)
         );
 
         let resp = client
@@ -127,9 +129,10 @@ impl AsrProvider for AliyunAsr {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
+            let safe_body = if body.len() > 200 { &body[..200] } else { &body };
             return Err(AppError::Asr(format!(
                 "Aliyun ASR error HTTP {}: {}",
-                status, body
+                status, safe_body
             )));
         }
 
@@ -170,4 +173,16 @@ pub fn test_connection(app_key: &str, ak_id: &str, ak_secret: &str) -> Result<St
     asr.get_token()
         .map(|_| "阿里云 ASR 鉴权成功".to_string())
         .map_err(|e| e.to_string())
+}
+
+fn url_encode(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| {
+            if c.is_alphanumeric() || "-_.~".contains(c) {
+                vec![c]
+            } else {
+                format!("%{:02X}", c as u32).chars().collect::<Vec<_>>()
+            }
+        })
+        .collect()
 }

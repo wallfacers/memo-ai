@@ -105,6 +105,9 @@ export interface LlmTestResult {
 }
 
 export function useTestLlmConnection() {
-  return (settings: AppSettings) =>
-    invoke<LlmTestResult>("test_llm_connection", { settings });
+  return useCallback(
+    (settings: AppSettings) =>
+      invoke<LlmTestResult>("test_llm_connection", { settings }),
+    []
+  );
 }
