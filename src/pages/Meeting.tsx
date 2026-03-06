@@ -125,7 +125,7 @@ export function Meeting() {
   const badgeConfig = statusBadge[currentMeeting.status];
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
         <h2 className="text-lg font-semibold text-foreground truncate pr-4">
@@ -161,7 +161,7 @@ export function Meeting() {
           <TabsTrigger value="report">报告</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="transcript" className="flex-1 overflow-hidden min-h-0 mt-4">
+        <TabsContent value="transcript" className="flex-1 overflow-auto min-h-0 mt-4">
           <TranscriptView transcripts={transcripts} />
         </TabsContent>
 

@@ -2,7 +2,7 @@ import { Mic } from "lucide-react";
 
 export function Home() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-center px-8">
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center px-8">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
         <Mic className="h-8 w-8 text-primary" />
       </div>

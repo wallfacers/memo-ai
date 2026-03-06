@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Transcript } from "@/types";
 import { formatTimestamp } from "@/utils/format";
 
@@ -23,23 +22,21 @@ export function TranscriptView({ transcripts }: TranscriptViewProps) {
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="flex flex-col gap-3 pr-3">
-        {transcripts.map((t) => (
-          <div key={t.id} className="flex gap-3">
-            <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-muted-foreground w-10">
-              {formatTimestamp(t.timestamp)}
-            </span>
-            <div className="text-sm leading-relaxed">
-              {t.speaker && (
-                <span className="font-semibold text-primary mr-1">{t.speaker}：</span>
-              )}
-              <span className="text-foreground">{t.text}</span>
-            </div>
+    <div className="flex flex-col gap-3 pb-4">
+      {transcripts.map((t) => (
+        <div key={t.id} className="flex gap-3">
+          <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-muted-foreground w-10">
+            {formatTimestamp(t.timestamp)}
+          </span>
+          <div className="text-sm leading-relaxed">
+            {t.speaker && (
+              <span className="font-semibold text-primary mr-1">{t.speaker}：</span>
+            )}
+            <span className="text-foreground">{t.text}</span>
           </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-    </ScrollArea>
+        </div>
+      ))}
+      <div ref={bottomRef} />
+    </div>
   );
 }

@@ -9,7 +9,7 @@ export default function App() {
     <BrowserRouter>
       <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/meeting/:id" element={<Meeting />} />

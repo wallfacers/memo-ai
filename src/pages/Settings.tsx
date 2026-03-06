@@ -57,7 +57,7 @@ export function Settings() {
   }
 
   return (
-    <div className="h-full overflow-auto">
+    <div className="flex-1 overflow-auto">
     <div className="max-w-xl mx-auto px-6 py-8 space-y-6">
       <h2 className="text-xl font-semibold text-foreground">设置</h2>
 
