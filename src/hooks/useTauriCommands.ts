@@ -115,7 +115,7 @@ export function useTestLlmConnection() {
 export interface WhisperCheckResult {
   found: boolean;
   version: string | null;
-  message: string;
+  status: string;
 }
 
 export interface AsrTestResult {

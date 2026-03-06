@@ -36,7 +36,7 @@ pub fn run() {
 
             let settings_path = commands::settings_path(&app.handle())
                 .unwrap_or_else(|_| data_dir.join("settings.json"));
-            let config = if settings_path.exists() {
+            let mut config = if settings_path.exists() {
                 match std::fs::read_to_string(&settings_path) {
                     Ok(s) => match serde_json::from_str::<commands::AppConfig>(&s) {
                         Ok(c) => c,
@@ -53,6 +53,11 @@ pub fn run() {
             } else {
                 commands::AppConfig::default()
             };
+            if config.whisper_model_dir.is_empty() {
+                if let Ok(home) = app.path().home_dir() {
+                    config.whisper_model_dir = home.join(".memo").to_string_lossy().into_owned();
+                }
+            }
             app.manage(ConfigState(Mutex::new(config)));
 
             Ok(())

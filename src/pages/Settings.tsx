@@ -26,6 +26,13 @@ import type { LlmTestResult, WhisperCheckResult, AsrTestResult } from "@/hooks/u
 import { useTranslation } from "react-i18next";
 import i18n, { saveLang } from "@/i18n";
 
+const isWindows = navigator.platform.toLowerCase().includes("win");
+
+function normalizePath(p: string): string {
+  if (!p) return p;
+  return isWindows ? p.replace(/\//g, "\\") : p.replace(/\\/g, "/");
+}
+
 export function Settings() {
   const { settings, setSettings } = useSettingsStore();
   const [local, setLocal] = useState<AppSettings>(settings);
@@ -48,6 +55,7 @@ export function Settings() {
   const [asrTestResult, setAsrTestResult] = React.useState<AsrTestResult | null>(null);
   const [asrTesting, setAsrTesting] = React.useState(false);
   const [showAliyunSecret, setShowAliyunSecret] = React.useState(false);
+  const [showLlmApiKey, setShowLlmApiKey] = React.useState(false);
   const { t } = useTranslation();
   const [currentLang, setCurrentLang] = useState(i18n.language);
 
@@ -187,17 +195,27 @@ export function Settings() {
           {local.llm_provider.type === "openai" && (
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{t("settings.llm.apiKey")}</label>
-              <Input
-                type="password"
-                value={local.llm_provider.api_key || ""}
-                onChange={(e) =>
-                  setLocal({
-                    ...local,
-                    llm_provider: { ...local.llm_provider, api_key: e.target.value || null },
-                  })
-                }
-                placeholder={t("settings.llm.apiKeyPlaceholder")}
-              />
+              <div className="flex gap-2">
+                <Input
+                  type={showLlmApiKey ? "text" : "password"}
+                  value={local.llm_provider.api_key || ""}
+                  onChange={(e) =>
+                    setLocal({
+                      ...local,
+                      llm_provider: { ...local.llm_provider, api_key: e.target.value || null },
+                    })
+                  }
+                  placeholder={t("settings.llm.apiKeyPlaceholder")}
+                  className="flex-1"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowLlmApiKey((v) => !v)}
+                >
+                  {showLlmApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           )}
           <div className="flex items-center gap-3 pt-1">
@@ -348,7 +366,7 @@ export function Settings() {
                         const result = await checkWhisperCli(local.whisper_cli_path);
                         setWhisperCheck(result);
                       } catch (e) {
-                        setWhisperCheck({ found: false, version: null, message: String(e) });
+                        setWhisperCheck({ found: false, version: null, status: "execFailed" });
                       } finally {
                         setWhisperChecking(false);
                       }
@@ -366,7 +384,7 @@ export function Settings() {
                     )}
                     {whisperCheck.found && whisperCheck.version
                       ? whisperCheck.version
-                      : whisperCheck.message}
+                      : t(`settings.asr.whisperStatus.${whisperCheck.status}`)}
                   </p>
                 )}
                 {!whisperCheck && (
@@ -383,7 +401,9 @@ export function Settings() {
                     value={local.whisper_model_dir}
                     onChange={(e) => setLocal({ ...local, whisper_model_dir: e.target.value })}
                     placeholder={t("settings.asr.modelDirPlaceholder")}
-                    className="flex-1"
+                    className="flex-1 font-mono text-xs"
+                    title={normalizePath(local.whisper_model_dir)}
+                    style={{ direction: "ltr" }}
                   />
                   <Button
                     variant="outline"
@@ -391,7 +411,7 @@ export function Settings() {
                     onClick={async () => {
                       const selected = await openDialog({ directory: true, multiple: false });
                       if (typeof selected === "string" && selected) {
-                        setLocal({ ...local, whisper_model_dir: selected });
+                        setLocal({ ...local, whisper_model_dir: normalizePath(selected) });
                       }
                     }}
                   >

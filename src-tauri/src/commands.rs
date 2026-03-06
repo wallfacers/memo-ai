@@ -55,7 +55,7 @@ impl Default for AppConfig {
             whisper_model: "base".into(),
             language: "zh".into(),
             whisper_cli_path: "whisper-cli".into(),
-            whisper_model_dir: "models".into(),
+            whisper_model_dir: String::new(),
             asr_provider: "local_whisper".into(),
             aliyun_asr_app_key: String::new(),
             aliyun_asr_access_key_id: String::new(),
@@ -521,49 +521,57 @@ pub fn test_llm_connection(settings: AppConfig) -> Result<LlmTestResult, String>
 pub struct WhisperCheckResult {
     pub found: bool,
     pub version: Option<String>,
-    pub message: String,
+    pub status: String,
 }
 
 #[tauri::command]
 pub fn check_whisper_cli(cli_path: String) -> Result<WhisperCheckResult, String> {
-    match std::process::Command::new(&cli_path)
+    // Step 1: check existence via -h (supported by all whisper-cli versions)
+    match std::process::Command::new(&cli_path).arg("-h").output() {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(WhisperCheckResult {
+                found: false,
+                version: None,
+                status: "notFound".to_string(),
+            });
+        }
+        Err(_) => {
+            return Ok(WhisperCheckResult {
+                found: false,
+                version: None,
+                status: "execFailed".to_string(),
+            });
+        }
+        Ok(_) => {} // executable exists, continue
+    }
+
+    // Step 2: try --version to get version string (newer versions support it)
+    let version = std::process::Command::new(&cli_path)
         .arg("--version")
         .output()
-    {
-        Ok(out) if out.status.success() || !out.stdout.is_empty() || !out.stderr.is_empty() => {
-            let version_raw = String::from_utf8_lossy(&out.stderr)
-                .lines()
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            let version = if version_raw.is_empty() {
+        .ok()
+        .and_then(|out| {
+            let text = if !out.stdout.is_empty() {
+                String::from_utf8_lossy(&out.stdout).into_owned()
+            } else {
+                String::from_utf8_lossy(&out.stderr).into_owned()
+            };
+            let first_line = text.lines().next().unwrap_or("").trim().to_string();
+            if first_line.is_empty()
+                || first_line.starts_with("error:")
+                || first_line.contains("unknown argument")
+            {
                 None
             } else {
-                Some(version_raw)
-            };
-            Ok(WhisperCheckResult {
-                found: true,
-                version,
-                message: format!("找到 whisper-cli: {}", cli_path),
-            })
-        }
-        Ok(_) => Ok(WhisperCheckResult {
-            found: false,
-            version: None,
-            message: format!("找到可执行文件但运行异常: {}", cli_path),
-        }),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(WhisperCheckResult {
-            found: false,
-            version: None,
-            message: "未找到 whisper-cli。请从 github.com/ggerganov/whisper.cpp/releases 下载".to_string(),
-        }),
-        Err(e) => Ok(WhisperCheckResult {
-            found: false,
-            version: None,
-            message: format!("检测失败: {}", e),
-        }),
-    }
+                Some(first_line)
+            }
+        });
+
+    Ok(WhisperCheckResult {
+        found: true,
+        version,
+        status: "found".to_string(),
+    })
 }
 
 #[derive(Serialize)]
