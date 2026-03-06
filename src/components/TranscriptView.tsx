@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import type { Transcript } from "../types";
-import { formatTimestamp } from "../utils/format";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { Transcript } from "@/types";
+import { formatTimestamp } from "@/utils/format";
 
 interface TranscriptViewProps {
   transcripts: Transcript[];
@@ -15,30 +16,30 @@ export function TranscriptView({ transcripts }: TranscriptViewProps) {
 
   if (transcripts.length === 0) {
     return (
-      <div style={{ color: "#6b7280", textAlign: "center", padding: "2rem" }}>
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
         暂无转写内容
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", maxHeight: 400 }}>
-      {transcripts.map((t) => (
-        <div key={t.id} style={{ display: "flex", gap: 12 }}>
-          <span style={{ color: "#9ca3af", fontSize: 12, minWidth: 40, paddingTop: 2 }}>
-            {formatTimestamp(t.timestamp)}
-          </span>
-          <div>
-            {t.speaker && (
-              <span style={{ fontWeight: 600, color: "#3b82f6", marginRight: 8 }}>
-                {t.speaker}：
-              </span>
-            )}
-            <span style={{ color: "#1f2937" }}>{t.text}</span>
+    <ScrollArea className="h-[400px] pr-3">
+      <div className="flex flex-col gap-3">
+        {transcripts.map((t) => (
+          <div key={t.id} className="flex gap-3">
+            <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-muted-foreground w-10">
+              {formatTimestamp(t.timestamp)}
+            </span>
+            <div className="text-sm leading-relaxed">
+              {t.speaker && (
+                <span className="font-semibold text-primary mr-1">{t.speaker}：</span>
+              )}
+              <span className="text-foreground">{t.text}</span>
+            </div>
           </div>
-        </div>
-      ))}
-      <div ref={bottomRef} />
-    </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+    </ScrollArea>
   );
 }
