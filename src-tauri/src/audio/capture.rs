@@ -9,6 +9,7 @@ pub struct AudioCapture {
     stream: Option<cpal::Stream>,
     sample_rate: u32,
     channels: u16,
+    chunk_tx: Option<std::sync::mpsc::SyncSender<Vec<i16>>>,
 }
 
 // SAFETY: cpal::Stream is !Send on Windows due to WASAPI COM apartment threading.
@@ -23,7 +24,13 @@ impl AudioCapture {
             stream: None,
             sample_rate: 16000,
             channels: 1,
+            chunk_tx: None,
         })
+    }
+
+    /// 注册音频块转发 sender，录音时每批 PCM 样本会同时发送给此 channel
+    pub fn set_chunk_sender(&mut self, tx: std::sync::mpsc::SyncSender<Vec<i16>>) {
+        self.chunk_tx = Some(tx);
     }
 
     pub fn start(&mut self) -> AppResult<()> {
@@ -42,15 +49,23 @@ impl AudioCapture {
 
         let samples = Arc::clone(&self.samples);
         let err_fn = |err| eprintln!("Audio stream error: {}", err);
+        let chunk_tx = self.chunk_tx.clone();
 
         let stream = match config.sample_format() {
             cpal::SampleFormat::F32 => {
                 let samples = Arc::clone(&samples);
+                let chunk_tx = chunk_tx.clone();
                 device.build_input_stream(
                     &config.into(),
                     move |data: &[f32], _| {
+                        let converted: Vec<i16> =
+                            data.iter().map(|&s| (s * i16::MAX as f32) as i16).collect();
                         let mut buf = samples.lock().unwrap();
-                        buf.extend(data.iter().map(|&s| (s * i16::MAX as f32) as i16));
+                        buf.extend_from_slice(&converted);
+                        // 转发给 FunASR 实时转写（如已注册）
+                        if let Some(ref tx) = chunk_tx {
+                            let _ = tx.try_send(converted);
+                        }
                     },
                     err_fn,
                     None,
@@ -58,11 +73,16 @@ impl AudioCapture {
             }
             cpal::SampleFormat::I16 => {
                 let samples = Arc::clone(&samples);
+                let chunk_tx = chunk_tx.clone();
                 device.build_input_stream(
                     &config.into(),
                     move |data: &[i16], _| {
                         let mut buf = samples.lock().unwrap();
                         buf.extend_from_slice(data);
+                        // 转发给 FunASR 实时转写（如已注册）
+                        if let Some(ref tx) = chunk_tx {
+                            let _ = tx.try_send(data.to_vec());
+                        }
                     },
                     err_fn,
                     None,
