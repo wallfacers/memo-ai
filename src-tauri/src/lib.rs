@@ -7,9 +7,10 @@ mod llm;
 
 use commands::{
     ConfigState, DbState, RecordState,
-    create_meeting, delete_meeting, export_report, get_action_items, get_meeting, get_settings,
-    get_transcripts, list_meetings, rename_meeting, run_pipeline, save_settings, search_meetings,
-    start_recording, stop_recording, test_llm_connection, transcribe_audio, update_action_item_status,
+    check_whisper_cli, create_meeting, delete_meeting, export_report, get_action_items, get_meeting,
+    get_settings, get_transcripts, list_meetings, rename_meeting, run_pipeline, save_settings,
+    search_meetings, start_recording, stop_recording, test_asr_connection, test_llm_connection,
+    transcribe_audio, update_action_item_status,
 };
 use std::sync::Mutex;
 use tauri::Manager;
@@ -74,6 +75,8 @@ pub fn run() {
             get_settings,
             save_settings,
             test_llm_connection,
+            check_whisper_cli,
+            test_asr_connection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

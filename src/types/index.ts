@@ -52,12 +52,18 @@ export interface LlmProvider {
   api_key: string | null;
 }
 
+export type AsrProviderType = "local_whisper" | "aliyun";
+
 export interface AppSettings {
   llm_provider: LlmProvider;
   whisper_model: string;
   language: string;
   whisper_cli_path: string;
   whisper_model_dir: string;
+  asr_provider: AsrProviderType;
+  aliyun_asr_app_key: string;
+  aliyun_asr_access_key_id: string;
+  aliyun_asr_access_key_secret: string;
 }
 
 export interface PipelineResult {

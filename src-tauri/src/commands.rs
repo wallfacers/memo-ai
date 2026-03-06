@@ -515,6 +515,78 @@ pub fn test_llm_connection(settings: AppConfig) -> Result<LlmTestResult, String>
     }
 }
 
+// ─── ASR Commands ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct WhisperCheckResult {
+    pub found: bool,
+    pub version: Option<String>,
+    pub message: String,
+}
+
+#[tauri::command]
+pub fn check_whisper_cli(cli_path: String) -> Result<WhisperCheckResult, String> {
+    match std::process::Command::new(&cli_path)
+        .arg("--version")
+        .output()
+    {
+        Ok(out) => {
+            let version_raw = String::from_utf8_lossy(&out.stderr)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let version = if version_raw.is_empty() {
+                None
+            } else {
+                Some(version_raw)
+            };
+            Ok(WhisperCheckResult {
+                found: true,
+                version,
+                message: format!("找到 whisper-cli: {}", cli_path),
+            })
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(WhisperCheckResult {
+            found: false,
+            version: None,
+            message: "未找到 whisper-cli。请从 github.com/ggerganov/whisper.cpp/releases 下载".to_string(),
+        }),
+        Err(e) => Ok(WhisperCheckResult {
+            found: false,
+            version: None,
+            message: format!("检测失败: {}", e),
+        }),
+    }
+}
+
+#[derive(Serialize)]
+pub struct AsrTestResult {
+    pub success: bool,
+    pub message: String,
+}
+
+#[tauri::command]
+pub fn test_asr_connection(settings: AppConfig) -> Result<AsrTestResult, String> {
+    match settings.asr_provider.as_str() {
+        "aliyun" => {
+            match crate::asr::aliyun::test_connection(
+                &settings.aliyun_asr_app_key,
+                &settings.aliyun_asr_access_key_id,
+                &settings.aliyun_asr_access_key_secret,
+            ) {
+                Ok(msg) => Ok(AsrTestResult { success: true, message: msg }),
+                Err(e) => Ok(AsrTestResult { success: false, message: e }),
+            }
+        }
+        _ => Ok(AsrTestResult {
+            success: false,
+            message: "当前 ASR Provider 无需测试".to_string(),
+        }),
+    }
+}
+
 // ─── Settings Commands ────────────────────────────────────────────────────────
 
 #[tauri::command]

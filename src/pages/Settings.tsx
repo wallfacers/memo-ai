@@ -18,9 +18,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useSettingsStore } from "@/store/settingsStore";
 import type { AppSettings } from "@/types";
-import { Check, Loader2, CheckCircle2, XCircle } from "lucide-react";
-import { useTestLlmConnection } from "@/hooks/useTauriCommands";
-import type { LlmTestResult } from "@/hooks/useTauriCommands";
+import type { AsrProviderType } from "@/types";
+import { Check, Loader2, CheckCircle2, XCircle, Eye, EyeOff } from "lucide-react";
+import { useTestLlmConnection, useCheckWhisperCli, useTestAsrConnection } from "@/hooks/useTauriCommands";
+import type { LlmTestResult, WhisperCheckResult, AsrTestResult } from "@/hooks/useTauriCommands";
 import { useTranslation } from "react-i18next";
 import i18n, { saveLang } from "@/i18n";
 
@@ -36,6 +37,13 @@ export function Settings() {
   type TestStatus = "idle" | "testing" | "ok" | "fail";
   const [llmTestStatus, setLlmTestStatus] = React.useState<TestStatus>("idle");
   const [llmTestResult, setLlmTestResult] = React.useState<LlmTestResult | null>(null);
+  const checkWhisperCli = useCheckWhisperCli();
+  const testAsrConnection = useTestAsrConnection();
+  const [whisperCheck, setWhisperCheck] = React.useState<WhisperCheckResult | null>(null);
+  const [whisperChecking, setWhisperChecking] = React.useState(false);
+  const [asrTestResult, setAsrTestResult] = React.useState<AsrTestResult | null>(null);
+  const [asrTesting, setAsrTesting] = React.useState(false);
+  const [showAliyunSecret, setShowAliyunSecret] = React.useState(false);
   const { t } = useTranslation();
   const [currentLang, setCurrentLang] = useState(i18n.language);
 
@@ -216,32 +224,35 @@ export function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            {t("settings.asr.sectionTitle")}
+            ASR 配置
           </CardTitle>
         </CardHeader>
         <Separator />
         <CardContent className="space-y-4">
+          {/* Provider 选择 */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">{t("settings.asr.whisperModel")}</label>
+            <label className="text-sm font-medium text-foreground">ASR 引擎</label>
             <Select
-              value={local.whisper_model}
-              onValueChange={(v) => setLocal({ ...local, whisper_model: v })}
+              value={local.asr_provider}
+              onValueChange={(v) => {
+                setLocal({ ...local, asr_provider: v as AsrProviderType });
+                setWhisperCheck(null);
+                setAsrTestResult(null);
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="tiny">{t("settings.asr.modelTiny")}</SelectItem>
-                <SelectItem value="base">{t("settings.asr.modelBase")}</SelectItem>
-                <SelectItem value="small">{t("settings.asr.modelSmall")}</SelectItem>
-                <SelectItem value="medium">{t("settings.asr.modelMedium")}</SelectItem>
-                <SelectItem value="large">{t("settings.asr.modelLarge")}</SelectItem>
+                <SelectItem value="local_whisper">本地 Whisper</SelectItem>
+                <SelectItem value="aliyun">阿里云 ASR</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
+          {/* 识别语言（公共） */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">{t("settings.asr.language")}</label>
+            <label className="text-sm font-medium text-foreground">识别语言</label>
             <Select
               value={local.language}
               onValueChange={(v) => setLocal({ ...local, language: v })}
@@ -250,44 +261,178 @@ export function Settings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="zh">{t("settings.asr.langZh")}</SelectItem>
-                <SelectItem value="en">{t("settings.asr.langEn")}</SelectItem>
-                <SelectItem value="auto">{t("settings.asr.langAuto")}</SelectItem>
+                <SelectItem value="zh">中文</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="auto">自动检测</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              {t("settings.asr.whisperCliPath")}
-            </label>
-            <Input
-              value={local.whisper_cli_path}
-              onChange={(e) =>
-                setLocal({ ...local, whisper_cli_path: e.target.value })
-              }
-              placeholder={t("settings.asr.whisperCliPathPlaceholder")}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {t("settings.asr.whisperCliPathHint")}
-            </p>
-          </div>
+          {/* 本地 Whisper 面板 */}
+          {local.asr_provider === "local_whisper" && (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Whisper 模型</label>
+                <Select
+                  value={local.whisper_model}
+                  onValueChange={(v) => setLocal({ ...local, whisper_model: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tiny">tiny（最快）</SelectItem>
+                    <SelectItem value="base">base（推荐）</SelectItem>
+                    <SelectItem value="small">small</SelectItem>
+                    <SelectItem value="medium">medium</SelectItem>
+                    <SelectItem value="large">large（最准）</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              {t("settings.asr.modelDir")}
-            </label>
-            <Input
-              value={local.whisper_model_dir}
-              onChange={(e) =>
-                setLocal({ ...local, whisper_model_dir: e.target.value })
-              }
-              placeholder={t("settings.asr.modelDirPlaceholder")}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {t("settings.asr.modelDirHint")}
-            </p>
-          </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">whisper-cli 路径</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={local.whisper_cli_path}
+                    onChange={(e) => {
+                      setLocal({ ...local, whisper_cli_path: e.target.value });
+                      setWhisperCheck(null);
+                    }}
+                    placeholder="whisper-cli 或绝对路径"
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={whisperChecking}
+                    onClick={async () => {
+                      setWhisperChecking(true);
+                      setWhisperCheck(null);
+                      try {
+                        const result = await checkWhisperCli(local.whisper_cli_path);
+                        setWhisperCheck(result);
+                      } catch (e) {
+                        setWhisperCheck({ found: false, version: null, message: String(e) });
+                      } finally {
+                        setWhisperChecking(false);
+                      }
+                    }}
+                  >
+                    {whisperChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "检测"}
+                  </Button>
+                </div>
+                {whisperCheck && (
+                  <p className={`flex items-center gap-1 text-xs ${whisperCheck.found ? "text-green-600" : "text-destructive"}`}>
+                    {whisperCheck.found ? (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <XCircle className="h-3.5 w-3.5" />
+                    )}
+                    {whisperCheck.found && whisperCheck.version
+                      ? whisperCheck.version
+                      : whisperCheck.message}
+                  </p>
+                )}
+                {!whisperCheck && (
+                  <p className="text-[11px] text-muted-foreground">
+                    下载：github.com/ggerganov/whisper.cpp/releases
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">模型文件目录</label>
+                <Input
+                  value={local.whisper_model_dir}
+                  onChange={(e) => setLocal({ ...local, whisper_model_dir: e.target.value })}
+                  placeholder="models"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  存放 ggml-*.bin 模型文件的目录路径
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* 阿里云 ASR 面板 */}
+          {local.asr_provider === "aliyun" && (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">AppKey</label>
+                <Input
+                  value={local.aliyun_asr_app_key}
+                  onChange={(e) => setLocal({ ...local, aliyun_asr_app_key: e.target.value })}
+                  placeholder="项目 AppKey"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">AccessKey ID</label>
+                <Input
+                  value={local.aliyun_asr_access_key_id}
+                  onChange={(e) => setLocal({ ...local, aliyun_asr_access_key_id: e.target.value })}
+                  placeholder="AccessKey ID"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">AccessKey Secret</label>
+                <div className="flex gap-2">
+                  <Input
+                    type={showAliyunSecret ? "text" : "password"}
+                    value={local.aliyun_asr_access_key_secret}
+                    onChange={(e) => setLocal({ ...local, aliyun_asr_access_key_secret: e.target.value })}
+                    placeholder="AccessKey Secret"
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAliyunSecret((v) => !v)}
+                  >
+                    {showAliyunSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  在阿里云控制台 → 智能语音交互 → 项目管理 获取 AppKey；在账号中心获取 AccessKey
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={asrTesting}
+                  onClick={async () => {
+                    setAsrTesting(true);
+                    setAsrTestResult(null);
+                    try {
+                      const result = await testAsrConnection(local);
+                      setAsrTestResult(result);
+                    } catch (e) {
+                      setAsrTestResult({ success: false, message: String(e) });
+                    } finally {
+                      setAsrTesting(false);
+                    }
+                  }}
+                >
+                  {asrTesting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                  测试配置
+                </Button>
+                {asrTestResult && (
+                  <span className={`flex items-center gap-1 text-xs ${asrTestResult.success ? "text-green-600" : "text-destructive"}`}>
+                    {asrTestResult.success ? (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <XCircle className="h-3.5 w-3.5" />
+                    )}
+                    {asrTestResult.message}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

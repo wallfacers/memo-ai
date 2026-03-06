@@ -111,3 +111,30 @@ export function useTestLlmConnection() {
     []
   );
 }
+
+export interface WhisperCheckResult {
+  found: boolean;
+  version: string | null;
+  message: string;
+}
+
+export interface AsrTestResult {
+  success: boolean;
+  message: string;
+}
+
+export function useCheckWhisperCli() {
+  return useCallback(
+    (cliPath: string) =>
+      invoke<WhisperCheckResult>("check_whisper_cli", { cliPath }),
+    []
+  );
+}
+
+export function useTestAsrConnection() {
+  return useCallback(
+    (settings: AppSettings) =>
+      invoke<AsrTestResult>("test_asr_connection", { settings }),
+    []
+  );
+}
