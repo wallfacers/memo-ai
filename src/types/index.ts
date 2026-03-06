@@ -61,9 +61,7 @@ export interface AppSettings {
 
 export interface PipelineResult {
   clean_transcript: string;
-  structure: MeetingStructure;
   summary: string;
-  action_items: ActionItem[];
   report: string;
   generated_title?: string;
 }
