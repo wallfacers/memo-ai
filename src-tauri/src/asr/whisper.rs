@@ -1,6 +1,7 @@
 use std::path::Path;
 use crate::error::{AppError, AppResult};
 use super::transcript::TranscriptSegment;
+use super::provider::AsrProvider;
 
 pub struct WhisperAsr {
     cli_path: String,
@@ -16,8 +17,12 @@ impl WhisperAsr {
             language: language.to_string(),
         }
     }
+}
 
-    pub fn transcribe(&self, audio_path: &Path) -> AppResult<Vec<TranscriptSegment>> {
+impl AsrProvider for WhisperAsr {
+    fn name(&self) -> &'static str { "local_whisper" }
+
+    fn transcribe(&self, audio_path: &Path) -> AppResult<Vec<TranscriptSegment>> {
         let output = std::process::Command::new(&self.cli_path)
             .arg("-f")
             .arg(audio_path.to_str().unwrap_or(""))

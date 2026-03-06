@@ -7,7 +7,7 @@ use crate::db::models::{self, Meeting, Transcript, ActionItem};
 use crate::llm::client::LlmConfig;
 use crate::llm::pipeline::Pipeline;
 use crate::audio::capture::AudioCapture;
-use crate::asr::whisper::WhisperAsr;
+use crate::asr::build_asr;
 
 pub struct DbState(pub Mutex<rusqlite::Connection>);
 pub struct RecordState(pub Mutex<Option<AudioCapture>>);
@@ -20,6 +20,18 @@ pub struct AppConfig {
     pub language: String,
     pub whisper_cli_path: String,
     pub whisper_model_dir: String,
+    #[serde(default = "default_asr_provider")]
+    pub asr_provider: String,
+    #[serde(default)]
+    pub aliyun_asr_app_key: String,
+    #[serde(default)]
+    pub aliyun_asr_access_key_id: String,
+    #[serde(default)]
+    pub aliyun_asr_access_key_secret: String,
+}
+
+fn default_asr_provider() -> String {
+    "local_whisper".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +56,10 @@ impl Default for AppConfig {
             language: "zh".into(),
             whisper_cli_path: "whisper-cli".into(),
             whisper_model_dir: "models".into(),
+            asr_provider: "local_whisper".into(),
+            aliyun_asr_app_key: String::new(),
+            aliyun_asr_access_key_id: String::new(),
+            aliyun_asr_access_key_secret: String::new(),
         }
     }
 }
@@ -171,8 +187,7 @@ pub fn transcribe_audio(
     config: State<'_, ConfigState>,
 ) -> Result<String, String> {
     let cfg = (*config).0.lock().unwrap().clone();
-    let model_path = format!("{}/ggml-{}.bin", cfg.whisper_model_dir, cfg.whisper_model);
-    let asr = WhisperAsr::new(&cfg.whisper_cli_path, &model_path, &cfg.language);
+    let asr = build_asr(&cfg);
 
     let path = PathBuf::from(&audio_path);
     let segments = asr.transcribe(&path).map_err(|e| e.to_string())?;
