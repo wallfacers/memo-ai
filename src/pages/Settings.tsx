@@ -24,6 +24,8 @@ export function Settings() {
   const { settings, setSettings } = useSettingsStore();
   const [local, setLocal] = useState<AppSettings>(settings);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const savedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     invoke<AppSettings>("get_settings")
@@ -34,14 +36,21 @@ export function Settings() {
       .catch(() => {});
   }, [setSettings]);
 
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
   async function handleSave() {
     try {
       await invoke("save_settings", { settings: local });
       setSettings(local);
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      alert(`保存失败: ${e}`);
+      setSaveError(String(e));
     }
   }
 
@@ -174,6 +183,9 @@ export function Settings() {
           "保存设置"
         )}
       </Button>
+      {saveError && (
+        <p className="text-sm text-destructive text-center">{saveError}</p>
+      )}
     </div>
   );
 }

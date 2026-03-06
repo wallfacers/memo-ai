@@ -37,13 +37,6 @@ export function Meeting() {
 
   const { isRecording, error, startRecording, stopRecording } = useRecording(meetingId);
 
-  useEffect(() => {
-    if (!meetingId) return;
-    loadMeeting();
-    loadTranscripts();
-    loadActionItems();
-  }, [meetingId]);
-
   async function loadMeeting() {
     const meeting = await invoke<MeetingType>("get_meeting", { id: meetingId });
     setCurrentMeeting(meeting);
@@ -58,6 +51,14 @@ export function Meeting() {
     const data = await invoke<ActionItem[]>("get_action_items", { meetingId });
     setActionItems(data);
   }
+
+  useEffect(() => {
+    if (!meetingId) return;
+    void loadMeeting();
+    void loadTranscripts();
+    void loadActionItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingId]);
 
   async function handleStopAndProcess() {
     const audioPath = await stopRecording();
