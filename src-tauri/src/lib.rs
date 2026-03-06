@@ -32,12 +32,22 @@ pub fn run() {
             app.manage(DbState(Mutex::new(conn)));
             app.manage(RecordState(Mutex::new(None)));
 
-            let settings_path = data_dir.join("settings.json");
+            let settings_path = commands::settings_path(&app.handle())
+                .unwrap_or_else(|_| data_dir.join("settings.json"));
             let config = if settings_path.exists() {
-                std::fs::read_to_string(&settings_path)
-                    .ok()
-                    .and_then(|s| serde_json::from_str::<commands::AppConfig>(&s).ok())
-                    .unwrap_or_default()
+                match std::fs::read_to_string(&settings_path) {
+                    Ok(s) => match serde_json::from_str::<commands::AppConfig>(&s) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            log::warn!("Failed to parse settings.json: {}. Using defaults.", e);
+                            commands::AppConfig::default()
+                        }
+                    },
+                    Err(e) => {
+                        log::warn!("Failed to read settings.json: {}. Using defaults.", e);
+                        commands::AppConfig::default()
+                    }
+                }
             } else {
                 commands::AppConfig::default()
             };

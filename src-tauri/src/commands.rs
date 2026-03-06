@@ -44,7 +44,7 @@ impl Default for AppConfig {
     }
 }
 
-fn settings_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+pub fn settings_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     app_handle
         .path()
         .app_data_dir()
@@ -314,7 +314,10 @@ pub fn save_settings(
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())?;
+    // Atomic write: write to a temp file first, then rename (rename is atomic on same filesystem)
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, &json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
     *(*config).0.lock().unwrap() = settings;
     Ok(())
 }
