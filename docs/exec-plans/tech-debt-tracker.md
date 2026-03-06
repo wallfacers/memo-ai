@@ -16,30 +16,15 @@
 
 ## 当前技术债务
 
-### [Medium] LLM Pipeline 错误处理不完整
+_暂无未解决的技术债务。_
 
-- **位置**：`src-tauri/src/llm/pipeline.rs`
-- **描述**：各 Stage 的 JSON 解析失败时没有统一的降级策略
-- **影响**：某个阶段解析失败可能导致整个 Pipeline 中断
-- **解决方向**：为每个 Stage 添加 fallback 逻辑，解析失败时存储原始文本
+---
 
-### [Medium] Whisper 模型路径硬编码
+## 已解决的债务
 
-- **位置**：`src-tauri/src/asr/whisper.rs`
-- **描述**：模型文件路径可能硬编码或缺乏灵活配置
-- **影响**：用户无法自定义模型路径
-- **解决方向**：通过 Settings 配置模型路径，存入 settingsStore
-
-### [Low] 前端缺少全局错误边界
-
-- **位置**：`src/App.tsx`
-- **描述**：React 组件树没有 ErrorBoundary，未捕获的渲染错误会导致白屏
-- **影响**：用户体验差
-- **解决方向**：在 App.tsx 根组件添加 ErrorBoundary
-
-### [Low] 数据库迁移版本管理
-
-- **位置**：`src-tauri/src/db/migrations.rs`
-- **描述**：当前 schema 变更可能没有版本化迁移机制
-- **影响**：升级应用版本时可能导致数据库不兼容
-- **解决方向**：引入简单的版本号迁移系统（如 user_version pragma）
+| 债务 | 解决方案 | 解决于 |
+|------|---------|--------|
+| Pipeline JSON 解析失败中断 | Stage 3/5 降级返回空值，log::warn 记录 | 02-tech-debt Task 1 |
+| Whisper 模型路径硬编码 | AppConfig 新增 whisper_model_dir，Settings 可配置 | 02-tech-debt Task 2 |
+| 前端缺少全局错误边界 | ErrorBoundary 组件包裹 App main 区域 | 02-tech-debt Task 3 |
+| 数据库无迁移版本管理 | PRAGMA user_version + migrations.rs 版本化迁移 | 02-tech-debt Task 4 |
