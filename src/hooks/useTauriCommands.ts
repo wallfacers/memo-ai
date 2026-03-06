@@ -73,6 +73,15 @@ export function useUpdateActionItemStatus() {
   );
 }
 
+// Export / Search commands
+export async function exportReport(meetingId: number, path: string): Promise<void> {
+  await invoke<void>("export_report", { meetingId, path });
+}
+
+export async function searchMeetings(query: string): Promise<Meeting[]> {
+  return await invoke<Meeting[]>("search_meetings", { query });
+}
+
 // Settings commands
 export function useGetSettings() {
   return useCallback(() => invoke<AppSettings>("get_settings"), []);
