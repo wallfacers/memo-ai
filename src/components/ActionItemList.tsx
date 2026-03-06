@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { ActionItem } from "@/types";
@@ -8,10 +9,12 @@ interface ActionItemListProps {
 }
 
 export function ActionItemList({ items, onToggle }: ActionItemListProps) {
+  const { t } = useTranslation();
+
   if (items.length === 0) {
     return (
       <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        暂无行动项
+        {t("actionItem.empty")}
       </div>
     );
   }
@@ -50,8 +53,8 @@ export function ActionItemList({ items, onToggle }: ActionItemListProps) {
             </label>
             {(item.owner || item.deadline) && (
               <div className="mt-1 flex gap-3 text-[11px] text-muted-foreground">
-                {item.owner && <span>负责人：{item.owner}</span>}
-                {item.deadline && <span>截止：{item.deadline}</span>}
+                {item.owner && <span>{t("actionItem.owner", { name: item.owner })}</span>}
+                {item.deadline && <span>{t("actionItem.deadline", { date: item.deadline })}</span>}
               </div>
             )}
           </div>

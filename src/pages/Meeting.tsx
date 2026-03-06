@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { save } from "@tauri-apps/plugin-dialog";
 import { exportReport } from "@/hooks/useTauriCommands";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import {
   useGetMeeting,
@@ -20,15 +21,13 @@ import { useMeetingStore } from "@/store/meetingStore";
 import { useRecording } from "@/hooks/useRecording";
 import type { Meeting as MeetingType } from "@/types";
 
-const statusBadge: Record<
-  MeetingType["status"],
-  { label: string; variant: "default" | "destructive" | "secondary" | "outline" }
-> = {
-  idle: { label: "待录音", variant: "secondary" },
-  recording: { label: "录音中", variant: "destructive" },
-  processing: { label: "AI 处理中", variant: "outline" },
-  completed: { label: "已完成", variant: "default" },
-  error: { label: "出错", variant: "destructive" },
+type StatusVariant = "default" | "destructive" | "secondary" | "outline";
+const statusVariant: Record<MeetingType["status"], StatusVariant> = {
+  idle: "secondary",
+  recording: "destructive",
+  processing: "outline",
+  completed: "default",
+  error: "destructive",
 };
 
 export function Meeting() {
@@ -36,6 +35,7 @@ export function Meeting() {
   const meetingId = id ? parseInt(id) : null;
   const location = useLocation();
   const autoRecordRef = useRef(location.state?.autoRecord === true);
+  const { t } = useTranslation();
 
   const {
     currentMeeting,
@@ -93,7 +93,6 @@ export function Meeting() {
     void fetchActionItems();
   }, [meetingId, getMeeting, getTranscripts, getActionItems, setCurrentMeeting, setTranscripts, setActionItems]);
 
-  // Auto-start recording when navigated from Home quick-start
   useEffect(() => {
     if (autoRecordRef.current && currentMeeting?.status === "idle") {
       autoRecordRef.current = false;
@@ -111,7 +110,6 @@ export function Meeting() {
       await runPipeline(meetingId);
       await loadMeeting();
       await loadActionItems();
-      // Refresh sidebar meeting list so any AI-generated title is visible
       const updatedMeetings = await listMeetings();
       setMeetings(updatedMeetings);
       setCurrentMeetingStatus("completed");
@@ -129,12 +127,10 @@ export function Meeting() {
   if (!currentMeeting) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        加载中…
+        {t("meeting.loading")}
       </div>
     );
   }
-
-  const badgeConfig = statusBadge[currentMeeting.status];
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -143,8 +139,8 @@ export function Meeting() {
         <h2 className="text-lg font-semibold text-foreground truncate pr-4">
           {currentMeeting.title}
         </h2>
-        <Badge variant={badgeConfig.variant} className="shrink-0">
-          {badgeConfig.label}
+        <Badge variant={statusVariant[currentMeeting.status]} className="shrink-0">
+          {t(`meeting.status.${currentMeeting.status}`)}
         </Badge>
       </div>
 
@@ -157,7 +153,7 @@ export function Meeting() {
           onStop={handleStopAndProcess}
         />
         {currentMeeting.status === "processing" && (
-          <p className="text-sm text-amber-500 font-medium">AI 正在处理会议内容…</p>
+          <p className="text-sm text-amber-500 font-medium">{t("meeting.processingNotice")}</p>
         )}
         {error && (
           <p className="text-sm text-destructive">{error}</p>
@@ -167,10 +163,10 @@ export function Meeting() {
       {/* Tabs */}
       <Tabs defaultValue="transcript" className="flex-1 flex flex-col overflow-hidden min-h-0 px-6 pt-4">
         <TabsList className="shrink-0">
-          <TabsTrigger value="transcript">转写</TabsTrigger>
-          <TabsTrigger value="actions">行动项</TabsTrigger>
-          <TabsTrigger value="summary">总结</TabsTrigger>
-          <TabsTrigger value="report">报告</TabsTrigger>
+          <TabsTrigger value="transcript">{t("meeting.tabs.transcript")}</TabsTrigger>
+          <TabsTrigger value="actions">{t("meeting.tabs.actions")}</TabsTrigger>
+          <TabsTrigger value="summary">{t("meeting.tabs.summary")}</TabsTrigger>
+          <TabsTrigger value="report">{t("meeting.tabs.report")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="transcript" className="flex-1 overflow-auto min-h-0 mt-4">
@@ -188,7 +184,7 @@ export function Meeting() {
             </div>
           ) : (
             <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-              暂无总结，完成录音后 AI 将自动生成
+              {t("meeting.noSummary")}
             </div>
           )}
         </TabsContent>
@@ -211,7 +207,7 @@ export function Meeting() {
               }}
               className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
-              导出 .md
+              {t("meeting.exportMd")}
             </button>
           </div>
           {currentMeeting.report ? (
@@ -220,7 +216,7 @@ export function Meeting() {
             </div>
           ) : (
             <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-              暂无报告，完成录音后 AI 将自动生成
+              {t("meeting.noReport")}
             </div>
           )}
         </TabsContent>

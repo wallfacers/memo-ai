@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Mic, Settings, Plus, Search, Pencil, Trash2, Check, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   useListMeetings,
   useCreateMeeting,
@@ -26,13 +27,13 @@ const statusDot: Record<Meeting["status"], string> = {
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const { meetings, setMeetings, setError } = useMeetingStore();
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Meeting[] | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // rename state: meetingId -> draft title
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -71,7 +72,6 @@ export function Sidebar() {
       .catch((e) => setError(String(e)));
   }, [listMeetings, setMeetings, setError]);
 
-  // focus rename input when it appears
   useEffect(() => {
     if (renamingId !== null) {
       setTimeout(() => renameInputRef.current?.focus(), 0);
@@ -80,7 +80,7 @@ export function Sidebar() {
 
   async function createMeeting() {
     const now = new Date();
-    const title = `会议 ${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+    const title = `${t("meeting.meetingPrefix")} ${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
     try {
       setCreating(true);
       const meeting = await createMeetingCmd(title, true);
@@ -100,7 +100,6 @@ export function Sidebar() {
       const updated = useMeetingStore.getState().meetings.filter((m) => m.id !== id);
       setMeetings(updated);
       if (searchResults) setSearchResults(searchResults.filter((m) => m.id !== id));
-      // navigate away if deleted current meeting
       if (location.pathname === `/meeting/${id}`) navigate("/");
     } catch (e) {
       setError(String(e));
@@ -162,13 +161,13 @@ export function Sidebar() {
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">Memo AI</p>
-            <p className="text-[10px] text-muted-foreground leading-none mt-0.5">AI 会议助手</p>
+            <p className="text-[10px] text-muted-foreground leading-none mt-0.5">{t("sidebar.appSubtitle")}</p>
           </div>
         </button>
         <button
           onClick={createMeeting}
           disabled={creating}
-          title="新建会议"
+          title={t("sidebar.newMeeting")}
           className="flex h-7 w-7 items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -185,7 +184,7 @@ export function Sidebar() {
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
-            placeholder="搜索会议..."
+            placeholder={t("sidebar.searchPlaceholder")}
             className="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-3 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
@@ -199,7 +198,7 @@ export function Sidebar() {
             if (displayedMeetings.length === 0) {
               return (
                 <p className="text-xs text-muted-foreground text-center py-6">
-                  {searchQuery ? "无匹配会议" : "暂无会议记录"}
+                  {searchQuery ? t("sidebar.noResults") : t("sidebar.noMeetings")}
                 </p>
               );
             }
@@ -214,7 +213,6 @@ export function Sidebar() {
                 )}
               >
                 {renamingId === m.id ? (
-                  /* 重命名模式 */
                   <div className="flex items-center gap-1 px-2 py-1.5">
                     <input
                       ref={renameInputRef}
@@ -240,7 +238,6 @@ export function Sidebar() {
                     </button>
                   </div>
                 ) : (
-                  /* 正常显示模式 */
                   <button
                     onClick={() => navigate(`/meeting/${m.id}`)}
                     className="w-full text-left px-2 py-2 text-xs"
@@ -267,19 +264,18 @@ export function Sidebar() {
                   </button>
                 )}
 
-                {/* 操作按钮（hover 显示）*/}
                 {renamingId !== m.id && (
                   <div className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5">
                     <button
                       onClick={(e) => startRename(m, e)}
-                      title="重命名"
+                      title={t("sidebar.rename")}
                       className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80 transition-colors"
                     >
                       <Pencil className="h-3 w-3" />
                     </button>
                     <button
                       onClick={(e) => deleteMeeting(m.id, e)}
-                      title="删除"
+                      title={t("sidebar.delete")}
                       className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-background/80 transition-colors"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -307,7 +303,7 @@ export function Sidebar() {
           )}
         >
           <Settings className="h-3.5 w-3.5" />
-          设置
+          {t("sidebar.settings")}
         </button>
       </div>
     </aside>

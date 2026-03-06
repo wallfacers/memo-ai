@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mic } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCreateMeeting } from "@/hooks/useTauriCommands";
 import { useMeetingStore } from "@/store/meetingStore";
 
 export function Home() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const createMeeting = useCreateMeeting();
   const { setMeetings } = useMeetingStore();
   const [creating, setCreating] = useState(false);
@@ -15,7 +17,7 @@ export function Home() {
     setCreating(true);
     try {
       const now = new Date();
-      const title = `会议 ${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+      const title = `${t("meeting.meetingPrefix")} ${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
       const meeting = await createMeeting(title, true);
       setMeetings([meeting, ...useMeetingStore.getState().meetings]);
       navigate(`/meeting/${meeting.id}`, { state: { autoRecord: true } });
@@ -35,10 +37,10 @@ export function Home() {
       </button>
       <div>
         <h2 className="text-xl font-semibold text-foreground">
-          {creating ? "正在创建…" : "点击开始录音"}
+          {creating ? t("home.creating") : t("home.clickToRecord")}
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          将自动创建新会议并开始录制
+          {t("home.autoCreate")}
         </p>
       </div>
     </div>

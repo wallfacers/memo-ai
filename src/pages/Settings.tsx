@@ -19,6 +19,8 @@ import { Separator } from "@/components/ui/separator";
 import { useSettingsStore } from "@/store/settingsStore";
 import type { AppSettings } from "@/types";
 import { Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import i18n, { saveLang } from "@/i18n";
 
 export function Settings() {
   const { settings, setSettings } = useSettingsStore();
@@ -28,6 +30,8 @@ export function Settings() {
   const savedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const getSettings = useGetSettings();
   const saveSettings = useSaveSettings();
+  const { t } = useTranslation();
+  const [currentLang, setCurrentLang] = useState(i18n.language);
 
   useEffect(() => {
     getSettings()
@@ -56,21 +60,55 @@ export function Settings() {
     }
   }
 
+  function handleLangChange(lang: string) {
+    i18n.changeLanguage(lang);
+    saveLang(lang);
+    setCurrentLang(lang);
+  }
+
   return (
     <div className="flex-1 overflow-auto">
     <div className="max-w-xl mx-auto px-6 py-8 space-y-6">
-      <h2 className="text-xl font-semibold text-foreground">设置</h2>
+      <h2 className="text-xl font-semibold text-foreground">{t("settings.title")}</h2>
 
+      {/* 界面语言 */}
       <Card>
         <CardHeader>
           <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            LLM 配置
+            {t("settings.language.sectionTitle")}
+          </CardTitle>
+        </CardHeader>
+        <Separator />
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            {(["zh", "en"] as const).map((lang) => (
+              <button
+                key={lang}
+                onClick={() => handleLangChange(lang)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                  currentLang === lang
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-foreground border-input hover:bg-accent"
+                }`}
+              >
+                {t(`settings.language.${lang}`)}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* LLM 配置 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            {t("settings.llm.sectionTitle")}
           </CardTitle>
         </CardHeader>
         <Separator />
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Provider</label>
+            <label className="text-sm font-medium text-foreground">{t("settings.llm.provider")}</label>
             <Select
               value={local.llm_provider.type}
               onValueChange={(v) =>
@@ -84,14 +122,14 @@ export function Settings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ollama">Ollama（本地）</SelectItem>
-                <SelectItem value="openai">OpenAI</SelectItem>
+                <SelectItem value="ollama">{t("settings.llm.providerOllama")}</SelectItem>
+                <SelectItem value="openai">{t("settings.llm.providerOpenAI")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Base URL</label>
+            <label className="text-sm font-medium text-foreground">{t("settings.llm.baseUrl")}</label>
             <Input
               value={local.llm_provider.base_url}
               onChange={(e) =>
@@ -101,19 +139,19 @@ export function Settings() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">模型</label>
+            <label className="text-sm font-medium text-foreground">{t("settings.llm.model")}</label>
             <Input
               value={local.llm_provider.model}
               onChange={(e) =>
                 setLocal({ ...local, llm_provider: { ...local.llm_provider, model: e.target.value } })
               }
-              placeholder="llama3 / gpt-4o"
+              placeholder={t("settings.llm.modelPlaceholder")}
             />
           </div>
 
           {local.llm_provider.type === "openai" && (
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">API Key</label>
+              <label className="text-sm font-medium text-foreground">{t("settings.llm.apiKey")}</label>
               <Input
                 type="password"
                 value={local.llm_provider.api_key || ""}
@@ -123,23 +161,24 @@ export function Settings() {
                     llm_provider: { ...local.llm_provider, api_key: e.target.value || null },
                   })
                 }
-                placeholder="sk-..."
+                placeholder={t("settings.llm.apiKeyPlaceholder")}
               />
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* ASR 配置 */}
       <Card>
         <CardHeader>
           <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            ASR 配置
+            {t("settings.asr.sectionTitle")}
           </CardTitle>
         </CardHeader>
         <Separator />
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Whisper 模型</label>
+            <label className="text-sm font-medium text-foreground">{t("settings.asr.whisperModel")}</label>
             <Select
               value={local.whisper_model}
               onValueChange={(v) => setLocal({ ...local, whisper_model: v })}
@@ -148,17 +187,17 @@ export function Settings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="tiny">tiny（最快）</SelectItem>
-                <SelectItem value="base">base（推荐）</SelectItem>
-                <SelectItem value="small">small</SelectItem>
-                <SelectItem value="medium">medium</SelectItem>
-                <SelectItem value="large">large（最准）</SelectItem>
+                <SelectItem value="tiny">{t("settings.asr.modelTiny")}</SelectItem>
+                <SelectItem value="base">{t("settings.asr.modelBase")}</SelectItem>
+                <SelectItem value="small">{t("settings.asr.modelSmall")}</SelectItem>
+                <SelectItem value="medium">{t("settings.asr.modelMedium")}</SelectItem>
+                <SelectItem value="large">{t("settings.asr.modelLarge")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">识别语言</label>
+            <label className="text-sm font-medium text-foreground">{t("settings.asr.language")}</label>
             <Select
               value={local.language}
               onValueChange={(v) => setLocal({ ...local, language: v })}
@@ -167,42 +206,42 @@ export function Settings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="zh">中文</SelectItem>
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="auto">自动检测</SelectItem>
+                <SelectItem value="zh">{t("settings.asr.langZh")}</SelectItem>
+                <SelectItem value="en">{t("settings.asr.langEn")}</SelectItem>
+                <SelectItem value="auto">{t("settings.asr.langAuto")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">
-              Whisper CLI 路径
+              {t("settings.asr.whisperCliPath")}
             </label>
             <Input
               value={local.whisper_cli_path}
               onChange={(e) =>
                 setLocal({ ...local, whisper_cli_path: e.target.value })
               }
-              placeholder="whisper-cli 或绝对路径"
+              placeholder={t("settings.asr.whisperCliPathPlaceholder")}
             />
             <p className="text-[11px] text-muted-foreground">
-              下载：github.com/ggerganov/whisper.cpp/releases
+              {t("settings.asr.whisperCliPathHint")}
             </p>
           </div>
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">
-              模型文件目录
+              {t("settings.asr.modelDir")}
             </label>
             <Input
               value={local.whisper_model_dir}
               onChange={(e) =>
                 setLocal({ ...local, whisper_model_dir: e.target.value })
               }
-              placeholder="models"
+              placeholder={t("settings.asr.modelDirPlaceholder")}
             />
             <p className="text-[11px] text-muted-foreground">
-              存放 ggml-*.bin 模型文件的目录路径
+              {t("settings.asr.modelDirHint")}
             </p>
           </div>
         </CardContent>
@@ -212,10 +251,10 @@ export function Settings() {
         {saved ? (
           <>
             <Check className="mr-2 h-4 w-4" />
-            已保存
+            {t("settings.saved")}
           </>
         ) : (
-          "保存设置"
+          t("settings.save")
         )}
       </Button>
       {saveError && (

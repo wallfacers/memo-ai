@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { Transcript } from "@/types";
 import { formatTimestamp } from "@/utils/format";
 
@@ -7,6 +8,7 @@ interface TranscriptViewProps {
 }
 
 export function TranscriptView({ transcripts }: TranscriptViewProps) {
+  const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -16,23 +18,25 @@ export function TranscriptView({ transcripts }: TranscriptViewProps) {
   if (transcripts.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        暂无转写内容
+        {t("transcript.empty")}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3 pb-4">
-      {transcripts.map((t) => (
-        <div key={t.id} className="flex gap-3">
+      {transcripts.map((tr) => (
+        <div key={tr.id} className="flex gap-3">
           <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-muted-foreground w-10">
-            {formatTimestamp(t.timestamp)}
+            {formatTimestamp(tr.timestamp)}
           </span>
           <div className="text-sm leading-relaxed">
-            {t.speaker && (
-              <span className="font-semibold text-primary mr-1">{t.speaker}：</span>
+            {tr.speaker && (
+              <span className="font-semibold text-primary mr-1">
+                {tr.speaker}{t("transcript.speakerSuffix")}
+              </span>
             )}
-            <span className="text-foreground">{t.text}</span>
+            <span className="text-foreground">{tr.text}</span>
           </div>
         </div>
       ))}

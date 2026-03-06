@@ -1,4 +1,5 @@
 import { Mic, Square } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 interface RecordButtonProps {
@@ -9,11 +10,12 @@ interface RecordButtonProps {
 }
 
 export function RecordButton({ isRecording, disabled, onStart, onStop }: RecordButtonProps) {
+  const { t } = useTranslation();
   return (
     <button
       onClick={isRecording ? onStop : onStart}
       disabled={disabled}
-      aria-label={isRecording ? "停止录音" : "开始录音"}
+      aria-label={isRecording ? t("recordButton.stop") : t("recordButton.start")}
       className={cn(
         "flex h-20 w-20 items-center justify-center rounded-full transition-all duration-200",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
