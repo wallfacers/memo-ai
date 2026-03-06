@@ -4,6 +4,7 @@ mod commands;
 mod db;
 mod error;
 mod llm;
+mod process;
 
 use commands::{
     ConfigState, DbState, RecordState,
