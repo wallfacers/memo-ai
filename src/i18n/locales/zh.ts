@@ -70,7 +70,7 @@ const zh = {
     },
     llm: {
       sectionTitle: "LLM 配置",
-      provider: "Provider",
+      provider: "提供商",
       baseUrl: "Base URL",
       model: "模型",
       modelPlaceholder: "llama3 / gpt-4o",
