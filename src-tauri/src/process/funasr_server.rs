@@ -38,6 +38,7 @@ impl FunAsrServer {
             .spawn()
             .map_err(|e| format!("Failed to start funasr-server: {}", e))?;
 
+        // TODO: 替换为轮询端口可达性检测，当前 3s 固定等待在低配机器上可能不足
         // 等待服务就绪（简单 sleep 3s）
         std::thread::sleep(std::time::Duration::from_secs(3));
 
@@ -49,7 +50,20 @@ impl FunAsrServer {
 
     pub fn stop(&mut self) {
         if let Some(ref mut child) = self.child {
-            let _ = child.kill();
+            // Windows: 用 taskkill /F /T 递归终止进程树（包含 Python worker）
+            #[cfg(windows)]
+            {
+                let pid = child.id();
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .output();
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = child.kill();
+            }
+            // 回收进程资源，防止僵尸进程
+            let _ = child.wait();
         }
         self.child = None;
     }
