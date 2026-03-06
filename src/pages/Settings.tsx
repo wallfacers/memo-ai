@@ -62,13 +62,13 @@ export function Settings() {
       <h2 className="text-xl font-semibold text-foreground">设置</h2>
 
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader>
           <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             LLM 配置
           </CardTitle>
         </CardHeader>
         <Separator />
-        <CardContent className="pt-4 space-y-4">
+        <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Provider</label>
             <Select
@@ -131,13 +131,13 @@ export function Settings() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader>
           <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             ASR 配置
           </CardTitle>
         </CardHeader>
         <Separator />
-        <CardContent className="pt-4 space-y-4">
+        <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Whisper 模型</label>
             <Select
