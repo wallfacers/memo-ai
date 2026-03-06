@@ -62,7 +62,8 @@ memo-ai 采用 Tauri 架构，前端（React/TypeScript）与后端（Rust）通
 | 模块 | 路径 | 职责 |
 |------|------|------|
 | audio | `src/audio/` | 音频采集（capture.rs）、WASAPI 实现（wasapi.rs）、编码（encoder.rs） |
-| asr | `src/asr/` | Whisper 推理（whisper.rs）、转写结果（transcript.rs） |
+| asr | `src/asr/` | Whisper 推理（whisper.rs）、转写结果（transcript.rs）、funasr.rs（WebSocket 流式 + batch）、streaming.rs（StreamingAsrSession trait） |
+| process | `src-tauri/src/process/` | FunASR 进程生命周期管理（funasr_server.rs） |
 | llm | `src/llm/` | LLM 客户端接口（client.rs）、Ollama 实现（ollama.rs）、OpenAI 实现（openai.rs）、处理管道（pipeline.rs） |
 | db | `src/db/` | 数据库连接（connection.rs）、数据库迁移（migrations.rs）、数据模型（models.rs） |
 | acp | `src/acp/` | ACP 客户端（client.rs）、多轮会话管理（session.rs） |
@@ -82,10 +83,17 @@ Audio Capture (WASAPI)
     ▼
 Audio Encoder (WAV/MP3)
     │  音频文件
-    ▼
-Whisper ASR
-    │  原始转写文本
-    ▼
+    ├─► Whisper ASR（批量转写）
+    │       │  原始转写文本
+    │       ▼
+    │   LLM Pipeline (6 stages)
+    │
+    └─► FunASR WebSocket（实时流式）
+            │  temp/final 双态字幕
+            ▼
+        前端实时字幕展示
+
+（批量路径）
 LLM Pipeline (6 stages)
     │  结构化会议数据
     ▼

@@ -40,7 +40,8 @@ memo-ai/
 ├── src-tauri/             # Rust 后端
 │   └── src/
 │       ├── audio/         # 音频采集与编码
-│       ├── asr/           # 语音识别（Whisper）
+│       ├── asr/           # 语音识别（Whisper/FunASR/Aliyun）
+│       ├── process/       # FunASR 进程生命周期管理
 │       ├── llm/           # LLM 客户端（Ollama/OpenAI）
 │       ├── db/            # 数据库（SQLite）
 │       ├── commands.rs    # Tauri 命令（前后端桥接）

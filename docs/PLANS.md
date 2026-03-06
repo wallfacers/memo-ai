@@ -17,7 +17,7 @@
 
 ## 下一步：v1.0
 
-- 实时转写字幕（录音时边录边显示文字）
+- [x] 实时转写字幕（FunASR WebSocket 2pass，temp/final 双态）
 - 说话人识别
 - 会议历史列表搜索
 - 报告导出（Markdown / PDF）
