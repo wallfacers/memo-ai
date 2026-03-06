@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
+import { save } from "@tauri-apps/plugin-dialog";
+import { exportReport } from "@/hooks/useTauriCommands";
 import { Badge } from "@/components/ui/badge";
 import {
   useGetMeeting,
@@ -192,6 +194,26 @@ export function Meeting() {
         </TabsContent>
 
         <TabsContent value="report" className="flex-1 overflow-auto mt-4">
+          <div className="mb-3 flex justify-end">
+            <button
+              onClick={async () => {
+                const filePath = await save({
+                  defaultPath: `${currentMeeting.title ?? "report"}.md`,
+                  filters: [{ name: "Markdown", extensions: ["md"] }],
+                });
+                if (filePath) {
+                  try {
+                    await exportReport(currentMeeting.id, filePath);
+                  } catch (e) {
+                    console.error("Export failed:", e);
+                  }
+                }
+              }}
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              导出 .md
+            </button>
+          </div>
           {currentMeeting.report ? (
             <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed whitespace-pre-wrap font-mono text-foreground">
               {currentMeeting.report}
