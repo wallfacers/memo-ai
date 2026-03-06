@@ -199,14 +199,14 @@ export function Meeting() {
         {/* 录音阶段状态栏 */}
         {recordingPhase !== "idle" && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {recordingPhase === "connecting" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>连接中…</span></>}
-            {recordingPhase === "recording" && <><span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" /><span>录音中</span></>}
-            {recordingPhase === "stopping" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>正在停止…</span></>}
-            {recordingPhase === "batch_transcribing" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>精确转写中…</span></>}
-            {recordingPhase === "merging" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>智能合并中…</span></>}
-            {recordingPhase === "pipeline" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>AI 分析中…</span></>}
-            {recordingPhase === "done" && <><CheckCircle2 className="h-3.5 w-3.5 text-green-600" /><span>完成</span></>}
-            {recordingPhase === "error" && <><XCircle className="h-3.5 w-3.5 text-destructive" /><span>出错</span></>}
+            {recordingPhase === "connecting" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.connecting")}</span></>}
+            {recordingPhase === "recording" && <><span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" /><span>{t("meeting.phase.recording")}</span></>}
+            {recordingPhase === "stopping" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.stopping")}</span></>}
+            {recordingPhase === "batch_transcribing" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.batchTranscribing")}</span></>}
+            {recordingPhase === "merging" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.merging")}</span></>}
+            {recordingPhase === "pipeline" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.pipeline")}</span></>}
+            {recordingPhase === "done" && <><CheckCircle2 className="h-3.5 w-3.5 text-green-600" /><span>{t("meeting.phase.done")}</span></>}
+            {recordingPhase === "error" && <><XCircle className="h-3.5 w-3.5 text-destructive" /><span>{t("meeting.phase.error")}</span></>}
           </div>
         )}
 

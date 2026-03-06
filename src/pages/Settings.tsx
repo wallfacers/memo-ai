@@ -303,7 +303,7 @@ export function Settings() {
               <SelectContent>
                 <SelectItem value="local_whisper">{t("settings.asr.localWhisper")}</SelectItem>
                 <SelectItem value="aliyun">{t("settings.asr.aliyunProvider")}</SelectItem>
-                <SelectItem value="funasr">FunASR（本地）</SelectItem>
+                <SelectItem value="funasr">{t("settings.asr.funasrProvider")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -514,7 +514,7 @@ export function Settings() {
             <>
               {/* 启用实时字幕开关 */}
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-foreground">启用实时字幕</label>
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.funasrEnableRealtime")}</label>
                 <Switch
                   checked={local.funasr_enabled}
                   onCheckedChange={(v) => setLocal({ ...local, funasr_enabled: v })}
@@ -523,26 +523,26 @@ export function Settings() {
 
               {/* WebSocket 地址 */}
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">WebSocket 地址</label>
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.funasrWsUrl")}</label>
                 <Input
                   value={local.funasr_ws_url}
                   onChange={(e) => setLocal({ ...local, funasr_ws_url: e.target.value })}
-                  placeholder="留空则自动管理本地服务"
+                  placeholder={t("settings.asr.funasrWsUrlPlaceholder")}
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  示例：ws://localhost:10095 · 留空则检测并自动启动本地 funasr-server
+                  {t("settings.asr.funasrWsUrlHint")}
                 </p>
               </div>
 
               {/* funasr-server 路径（仅在 URL 为空时显示） */}
               {local.funasr_ws_url === "" && (
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">funasr-server 路径</label>
+                  <label className="text-sm font-medium text-foreground">{t("settings.asr.funasrServerPath")}</label>
                   <div className="flex gap-2">
                     <Input
                       value={local.funasr_server_path}
                       onChange={(e) => setLocal({ ...local, funasr_server_path: e.target.value })}
-                      placeholder="funasr-server 或绝对路径"
+                      placeholder={t("settings.asr.funasrServerPathPlaceholder")}
                       className="flex-1"
                     />
                     <Button
@@ -562,7 +562,7 @@ export function Settings() {
                         }
                       }}
                     >
-                      {funAsrChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "检测"}
+                      {funAsrChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("settings.asr.detect")}
                     </Button>
                   </div>
                   {funAsrCheckResult && (
@@ -574,14 +574,14 @@ export function Settings() {
                     </p>
                   )}
                   <p className="text-[11px] text-muted-foreground">
-                    安装：pip install funasr-runtime · 文档：github.com/modelscope/FunASR
+                    {t("settings.asr.funasrInstallHint")}
                   </p>
                 </div>
               )}
 
               {/* 端口配置 */}
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">监听端口</label>
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.funasrPort")}</label>
                 <Input
                   type="number"
                   value={local.funasr_port}
