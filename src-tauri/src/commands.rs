@@ -244,6 +244,13 @@ pub async fn transcribe_audio(
 
 // ─── Pipeline Command ─────────────────────────────────────────────────────────
 
+#[derive(Clone, Serialize)]
+pub struct PipelineStageDoneEvent {
+    pub stage: u8,
+    pub name: String,
+    pub summary: String,
+}
+
 #[derive(Serialize)]
 pub struct PipelineResult {
     pub clean_transcript: String,
@@ -255,7 +262,7 @@ pub struct PipelineResult {
 #[tauri::command]
 pub async fn run_pipeline(
     meeting_id: i64,
-    _app_handle: tauri::AppHandle,
+    app_handle: tauri::AppHandle,
     db: State<'_, DbState>,
     config: State<'_, ConfigState>,
 ) -> Result<PipelineResult, String> {
@@ -317,9 +324,18 @@ pub async fn run_pipeline(
 
     // 在独立 OS 线程中运行 LLM pipeline（完全脱离 Tokio 上下文，避免 reqwest::blocking 运行时冲突）
     let (tx, rx) = tokio::sync::oneshot::channel();
+    let app_for_cb = app_handle.clone();
+    let stage_cb: crate::llm::pipeline::StageCallback = Box::new(move |stage, name, summary| {
+        let _ = app_for_cb.emit("pipeline_stage_done", PipelineStageDoneEvent {
+            stage,
+            name: name.to_string(),
+            summary: summary.to_string(),
+        });
+    });
     std::thread::spawn(move || {
         let client = llm_config.build_client();
-        let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
+        let pipeline = Pipeline::new(client.as_ref(), &prompts_dir)
+            .with_callback(stage_cb);
         let _ = tx.send(pipeline.run(&transcript_text, auto_titled));
     });
     let output = rx.await
