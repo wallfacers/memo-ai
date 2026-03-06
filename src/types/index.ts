@@ -55,6 +55,7 @@ export interface AppSettings {
   llm_provider: LlmProvider;
   whisper_model: string;
   language: string;
+  whisper_cli_path: string;
 }
 
 export interface PipelineResult {

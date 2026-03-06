@@ -170,6 +170,22 @@ export function Settings() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">
+              Whisper CLI 路径
+            </label>
+            <Input
+              value={local.whisper_cli_path}
+              onChange={(e) =>
+                setLocal({ ...local, whisper_cli_path: e.target.value })
+              }
+              placeholder="whisper-cli 或绝对路径"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              下载：github.com/ggerganov/whisper.cpp/releases
+            </p>
+          </div>
         </CardContent>
       </Card>
 

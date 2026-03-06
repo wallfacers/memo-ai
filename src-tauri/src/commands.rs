@@ -18,6 +18,7 @@ pub struct AppConfig {
     pub llm_provider: LlmProviderConfig,
     pub whisper_model: String,
     pub language: String,
+    pub whisper_cli_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +41,7 @@ impl Default for AppConfig {
             },
             whisper_model: "base".into(),
             language: "zh".into(),
+            whisper_cli_path: "whisper-cli".into(),
         }
     }
 }
@@ -151,7 +153,7 @@ pub fn transcribe_audio(
 ) -> Result<String, String> {
     let cfg = (*config).0.lock().unwrap().clone();
     let model_path = format!("models/ggml-{}.bin", cfg.whisper_model);
-    let asr = WhisperAsr::new(&model_path, &cfg.language);
+    let asr = WhisperAsr::new(&cfg.whisper_cli_path, &model_path, &cfg.language);
 
     let path = PathBuf::from(&audio_path);
     let segments = asr.transcribe(&path).map_err(|e| e.to_string())?;
