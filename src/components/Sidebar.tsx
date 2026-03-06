@@ -29,14 +29,14 @@ export function Sidebar() {
     invoke<Meeting[]>("list_meetings")
       .then(setMeetings)
       .catch((e) => setError(String(e)));
-  }, []);
+  }, [setMeetings, setError]);
 
   async function createMeeting() {
     const title = newTitle.trim() || `会议 ${new Date().toLocaleString("zh-CN")}`;
     try {
       setCreating(true);
       const meeting = await invoke<Meeting>("create_meeting", { title });
-      setMeetings([meeting, ...meetings]);
+      setMeetings([meeting, ...useMeetingStore.getState().meetings]);
       setNewTitle("");
       navigate(`/meeting/${meeting.id}`);
     } catch (e) {
