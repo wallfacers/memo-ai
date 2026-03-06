@@ -23,6 +23,10 @@ export function useDeleteMeeting() {
   return useCallback((id: number) => invoke<void>("delete_meeting", { id }), []);
 }
 
+export function useRenameMeeting() {
+  return useCallback((id: number, title: string) => invoke<void>("rename_meeting", { id, title }), []);
+}
+
 // Recording commands
 export function useStartRecording() {
   return useCallback((meetingId: number) => invoke<void>("start_recording", { meetingId }), []);

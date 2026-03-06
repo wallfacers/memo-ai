@@ -1,13 +1,19 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Mic, Settings, Plus, Search } from "lucide-react";
-import { useListMeetings, useCreateMeeting, searchMeetings } from "@/hooks/useTauriCommands";
+import { Mic, Settings, Plus, Search, Pencil, Trash2, Check, X } from "lucide-react";
+import {
+  useListMeetings,
+  useCreateMeeting,
+  useDeleteMeeting,
+  useRenameMeeting,
+  searchMeetings,
+} from "@/hooks/useTauriCommands";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useMeetingStore } from "@/store/meetingStore";
 import { cn } from "@/lib/utils";
 import type { Meeting } from "@/types";
-import { formatDateTime } from "@/utils/format";
+import { formatDateTime, formatDuration } from "@/utils/format";
 
 const statusDot: Record<Meeting["status"], string> = {
   idle: "bg-muted-foreground/40",
@@ -25,6 +31,11 @@ export function Sidebar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Meeting[] | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // rename state: meetingId -> draft title
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = useCallback((q: string) => {
     setSearchQuery(q);
@@ -51,12 +62,21 @@ export function Sidebar() {
 
   const listMeetings = useListMeetings();
   const createMeetingCmd = useCreateMeeting();
+  const deleteMeetingCmd = useDeleteMeeting();
+  const renameMeetingCmd = useRenameMeeting();
 
   useEffect(() => {
     listMeetings()
       .then(setMeetings)
       .catch((e) => setError(String(e)));
   }, [listMeetings, setMeetings, setError]);
+
+  // focus rename input when it appears
+  useEffect(() => {
+    if (renamingId !== null) {
+      setTimeout(() => renameInputRef.current?.focus(), 0);
+    }
+  }, [renamingId]);
 
   async function createMeeting() {
     const title = `会议 ${new Date().toLocaleString("zh-CN")}`;
@@ -70,6 +90,52 @@ export function Sidebar() {
     } finally {
       setCreating(false);
     }
+  }
+
+  async function deleteMeeting(id: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      await deleteMeetingCmd(id);
+      const updated = useMeetingStore.getState().meetings.filter((m) => m.id !== id);
+      setMeetings(updated);
+      if (searchResults) setSearchResults(searchResults.filter((m) => m.id !== id));
+      // navigate away if deleted current meeting
+      if (location.pathname === `/meeting/${id}`) navigate("/");
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  function startRename(m: Meeting, e: React.MouseEvent) {
+    e.stopPropagation();
+    setRenamingId(m.id);
+    setRenameValue(m.title);
+  }
+
+  async function confirmRename(id: number) {
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      try {
+        await renameMeetingCmd(id, trimmed);
+        setMeetings(
+          useMeetingStore.getState().meetings.map((m) =>
+            m.id === id ? { ...m, title: trimmed } : m
+          )
+        );
+        if (searchResults) {
+          setSearchResults(
+            searchResults.map((m) => (m.id === id ? { ...m, title: trimmed } : m))
+          );
+        }
+      } catch (e) {
+        setError(String(e));
+      }
+    }
+    setRenamingId(null);
+  }
+
+  function cancelRename() {
+    setRenamingId(null);
   }
 
   function currentMeetingId(): number | null {
@@ -137,27 +203,89 @@ export function Sidebar() {
               );
             }
             return displayedMeetings.map((m) => (
-              <button
+              <div
                 key={m.id}
-                onClick={() => navigate(`/meeting/${m.id}`)}
                 className={cn(
-                  "w-full text-left rounded-md px-2 py-2 text-xs transition-colors",
-                  "hover:bg-accent hover:text-accent-foreground",
+                  "group relative rounded-md transition-colors",
                   activeMeetingId === m.id
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "text-foreground/80"
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-accent/60"
                 )}
               >
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <span
-                    className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDot[m.status])}
-                  />
-                  <span className="truncate font-medium">{m.title}</span>
-                </div>
-                <p className="text-[10px] text-muted-foreground pl-3">
-                  {formatDateTime(m.start_time)}
-                </p>
-              </button>
+                {renamingId === m.id ? (
+                  /* 重命名模式 */
+                  <div className="flex items-center gap-1 px-2 py-1.5">
+                    <input
+                      ref={renameInputRef}
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") confirmRename(m.id);
+                        if (e.key === "Escape") cancelRename();
+                      }}
+                      className="flex-1 min-w-0 text-xs px-1.5 py-0.5 rounded border border-ring bg-background focus:outline-none"
+                    />
+                    <button
+                      onClick={() => confirmRename(m.id)}
+                      className="text-emerald-500 hover:text-emerald-600"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={cancelRename}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  /* 正常显示模式 */
+                  <button
+                    onClick={() => navigate(`/meeting/${m.id}`)}
+                    className="w-full text-left px-2 py-2 text-xs"
+                  >
+                    <div className="flex items-center gap-1.5 mb-0.5 pr-10">
+                      <span
+                        className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDot[m.status])}
+                      />
+                      <span
+                        className={cn(
+                          "truncate font-medium",
+                          activeMeetingId === m.id ? "text-accent-foreground" : "text-foreground/80"
+                        )}
+                      >
+                        {m.title}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 pl-3 text-[10px] text-muted-foreground">
+                      <span>{formatDateTime(m.start_time)}</span>
+                      {m.end_time && (
+                        <span className="shrink-0">{formatDuration(m.start_time, m.end_time)}</span>
+                      )}
+                    </div>
+                  </button>
+                )}
+
+                {/* 操作按钮（hover 显示）*/}
+                {renamingId !== m.id && (
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5">
+                    <button
+                      onClick={(e) => startRename(m, e)}
+                      title="重命名"
+                      className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80 transition-colors"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={(e) => deleteMeeting(m.id, e)}
+                      title="删除"
+                      className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-background/80 transition-colors"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
             ));
           })()}
         </div>

@@ -131,12 +131,25 @@ pub fn stop_recording(
     *rec_guard = None;
 
     let audio_path_str = audio_path.to_string_lossy().to_string();
+    let end_time = chrono::Utc::now().to_rfc3339();
     let conn = (*db).0.lock().unwrap();
     models::update_meeting_audio_path(&conn, meeting_id, &audio_path_str)
+        .map_err(|e| e.to_string())?;
+    models::update_meeting_end_time(&conn, meeting_id, &end_time)
         .map_err(|e| e.to_string())?;
     models::update_meeting_status(&conn, meeting_id, "idle").map_err(|e| e.to_string())?;
 
     Ok(audio_path_str)
+}
+
+#[tauri::command]
+pub fn rename_meeting(
+    id: i64,
+    title: String,
+    db: State<'_, DbState>,
+) -> Result<(), String> {
+    let conn = (*db).0.lock().unwrap();
+    models::update_meeting_title(&conn, id, &title).map_err(|e| e.to_string())
 }
 
 // ─── Transcript Commands ──────────────────────────────────────────────────────

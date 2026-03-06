@@ -6,7 +6,7 @@ dayjs.extend(duration);
 dayjs.extend(relativeTime);
 
 export function formatDateTime(isoString: string): string {
-  return dayjs(isoString).format("YYYY-MM-DD HH:mm");
+  return dayjs(isoString).format("YYYY-MM-DD HH:mm:ss");
 }
 
 export function formatDuration(startIso: string, endIso: string | null): string {
