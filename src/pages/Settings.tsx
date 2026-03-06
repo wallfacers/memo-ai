@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
 import { useGetSettings, useSaveSettings } from "@/hooks/useTauriCommands";
 import { Input } from "@/components/ui/input";
@@ -28,9 +29,12 @@ import i18n, { saveLang } from "@/i18n";
 export function Settings() {
   const { settings, setSettings } = useSettingsStore();
   const [local, setLocal] = useState<AppSettings>(settings);
-  const [saved, setSaved] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const savedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [llmSaved, setLlmSaved] = useState(false);
+  const [llmSaveError, setLlmSaveError] = useState<string | null>(null);
+  const llmSavedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [asrSaved, setAsrSaved] = useState(false);
+  const [asrSaveError, setAsrSaveError] = useState<string | null>(null);
+  const asrSavedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const getSettings = useGetSettings();
   const saveSettings = useSaveSettings();
   const testLlmConnection = useTestLlmConnection();
@@ -58,19 +62,34 @@ export function Settings() {
 
   useEffect(() => {
     return () => {
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      if (llmSavedTimerRef.current) clearTimeout(llmSavedTimerRef.current);
+      if (asrSavedTimerRef.current) clearTimeout(asrSavedTimerRef.current);
     };
   }, []);
 
-  async function handleSave() {
+  async function handleSaveLlm() {
     try {
       await saveSettings(local);
       setSettings(local);
-      setSaved(true);
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
+      setLlmSaved(true);
+      setLlmSaveError(null);
+      if (llmSavedTimerRef.current) clearTimeout(llmSavedTimerRef.current);
+      llmSavedTimerRef.current = setTimeout(() => setLlmSaved(false), 2000);
     } catch (e) {
-      setSaveError(String(e));
+      setLlmSaveError(String(e));
+    }
+  }
+
+  async function handleSaveAsr() {
+    try {
+      await saveSettings(local);
+      setSettings(local);
+      setAsrSaved(true);
+      setAsrSaveError(null);
+      if (asrSavedTimerRef.current) clearTimeout(asrSavedTimerRef.current);
+      asrSavedTimerRef.current = setTimeout(() => setAsrSaved(false), 2000);
+    } catch (e) {
+      setAsrSaveError(String(e));
     }
   }
 
@@ -202,7 +221,7 @@ export function Settings() {
               {llmTestStatus === "testing" ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : null}
-              测试连接
+              {t("settings.llm.testConnection")}
             </Button>
             {llmTestStatus === "ok" && llmTestResult && (
               <span className="flex items-center gap-1 text-xs text-green-600">
@@ -217,6 +236,22 @@ export function Settings() {
               </span>
             )}
           </div>
+
+          <div className="pt-2">
+            <Button onClick={handleSaveLlm} className="w-full">
+              {llmSaved ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  {t("common.saved")}
+                </>
+              ) : (
+                t("settings.llm.save")
+              )}
+            </Button>
+            {llmSaveError && (
+              <p className="mt-1.5 text-sm text-destructive text-center">{llmSaveError}</p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -224,14 +259,14 @@ export function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            ASR 配置
+            {t("settings.asr.sectionTitle")}
           </CardTitle>
         </CardHeader>
         <Separator />
         <CardContent className="space-y-4">
           {/* Provider 选择 */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">ASR 引擎</label>
+            <label className="text-sm font-medium text-foreground">{t("settings.asr.engine")}</label>
             <Select
               value={local.asr_provider}
               onValueChange={(v) => {
@@ -244,15 +279,15 @@ export function Settings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="local_whisper">本地 Whisper</SelectItem>
-                <SelectItem value="aliyun">阿里云 ASR</SelectItem>
+                <SelectItem value="local_whisper">{t("settings.asr.localWhisper")}</SelectItem>
+                <SelectItem value="aliyun">{t("settings.asr.aliyunProvider")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* 识别语言（公共） */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">识别语言</label>
+            <label className="text-sm font-medium text-foreground">{t("settings.asr.language")}</label>
             <Select
               value={local.language}
               onValueChange={(v) => setLocal({ ...local, language: v })}
@@ -261,9 +296,9 @@ export function Settings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="zh">中文</SelectItem>
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="auto">自动检测</SelectItem>
+                <SelectItem value="zh">{t("settings.asr.langZh")}</SelectItem>
+                <SelectItem value="en">{t("settings.asr.langEn")}</SelectItem>
+                <SelectItem value="auto">{t("settings.asr.langAuto")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -272,7 +307,7 @@ export function Settings() {
           {local.asr_provider === "local_whisper" && (
             <>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">Whisper 模型</label>
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.whisperModel")}</label>
                 <Select
                   value={local.whisper_model}
                   onValueChange={(v) => setLocal({ ...local, whisper_model: v })}
@@ -281,17 +316,17 @@ export function Settings() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="tiny">tiny（最快）</SelectItem>
-                    <SelectItem value="base">base（推荐）</SelectItem>
-                    <SelectItem value="small">small</SelectItem>
-                    <SelectItem value="medium">medium</SelectItem>
-                    <SelectItem value="large">large（最准）</SelectItem>
+                    <SelectItem value="tiny">{t("settings.asr.modelTiny")}</SelectItem>
+                    <SelectItem value="base">{t("settings.asr.modelBase")}</SelectItem>
+                    <SelectItem value="small">{t("settings.asr.modelSmall")}</SelectItem>
+                    <SelectItem value="medium">{t("settings.asr.modelMedium")}</SelectItem>
+                    <SelectItem value="large">{t("settings.asr.modelLarge")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">whisper-cli 路径</label>
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.whisperCliPath")}</label>
                 <div className="flex gap-2">
                   <Input
                     value={local.whisper_cli_path}
@@ -299,7 +334,7 @@ export function Settings() {
                       setLocal({ ...local, whisper_cli_path: e.target.value });
                       setWhisperCheck(null);
                     }}
-                    placeholder="whisper-cli 或绝对路径"
+                    placeholder={t("settings.asr.whisperCliPathPlaceholder")}
                     className="flex-1"
                   />
                   <Button
@@ -319,7 +354,7 @@ export function Settings() {
                       }
                     }}
                   >
-                    {whisperChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "检测"}
+                    {whisperChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("settings.asr.detect")}
                   </Button>
                 </div>
                 {whisperCheck && (
@@ -336,20 +371,35 @@ export function Settings() {
                 )}
                 {!whisperCheck && (
                   <p className="text-[11px] text-muted-foreground">
-                    下载：github.com/ggerganov/whisper.cpp/releases
+                    {t("settings.asr.whisperCliPathHint")}
                   </p>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">模型文件目录</label>
-                <Input
-                  value={local.whisper_model_dir}
-                  onChange={(e) => setLocal({ ...local, whisper_model_dir: e.target.value })}
-                  placeholder="models"
-                />
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.modelDir")}</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={local.whisper_model_dir}
+                    onChange={(e) => setLocal({ ...local, whisper_model_dir: e.target.value })}
+                    placeholder={t("settings.asr.modelDirPlaceholder")}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const selected = await openDialog({ directory: true, multiple: false });
+                      if (typeof selected === "string" && selected) {
+                        setLocal({ ...local, whisper_model_dir: selected });
+                      }
+                    }}
+                  >
+                    {t("settings.asr.browse")}
+                  </Button>
+                </div>
                 <p className="text-[11px] text-muted-foreground">
-                  存放 ggml-*.bin 模型文件的目录路径
+                  {t("settings.asr.modelDirHint")}
                 </p>
               </div>
             </>
@@ -359,31 +409,31 @@ export function Settings() {
           {local.asr_provider === "aliyun" && (
             <>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">AppKey</label>
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.appKey")}</label>
                 <Input
                   value={local.aliyun_asr_app_key}
                   onChange={(e) => setLocal({ ...local, aliyun_asr_app_key: e.target.value })}
-                  placeholder="项目 AppKey"
+                  placeholder={t("settings.asr.appKey")}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">AccessKey ID</label>
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.accessKeyId")}</label>
                 <Input
                   value={local.aliyun_asr_access_key_id}
                   onChange={(e) => setLocal({ ...local, aliyun_asr_access_key_id: e.target.value })}
-                  placeholder="AccessKey ID"
+                  placeholder={t("settings.asr.accessKeyId")}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">AccessKey Secret</label>
+                <label className="text-sm font-medium text-foreground">{t("settings.asr.accessKeySecret")}</label>
                 <div className="flex gap-2">
                   <Input
                     type={showAliyunSecret ? "text" : "password"}
                     value={local.aliyun_asr_access_key_secret}
                     onChange={(e) => setLocal({ ...local, aliyun_asr_access_key_secret: e.target.value })}
-                    placeholder="AccessKey Secret"
+                    placeholder={t("settings.asr.accessKeySecret")}
                     className="flex-1"
                   />
                   <Button
@@ -395,7 +445,7 @@ export function Settings() {
                   </Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  在阿里云控制台 → 智能语音交互 → 项目管理 获取 AppKey；在账号中心获取 AccessKey
+                  {t("settings.asr.aliyunHint")}
                 </p>
               </div>
 
@@ -418,7 +468,7 @@ export function Settings() {
                   }}
                 >
                   {asrTesting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-                  测试配置
+                  {t("settings.asr.testConfig")}
                 </Button>
                 {asrTestResult && (
                   <span className={`flex items-center gap-1 text-xs ${asrTestResult.success ? "text-green-600" : "text-destructive"}`}>
@@ -433,22 +483,24 @@ export function Settings() {
               </div>
             </>
           )}
+
+          <div className="pt-2">
+            <Button onClick={handleSaveAsr} className="w-full">
+              {asrSaved ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  {t("common.saved")}
+                </>
+              ) : (
+                t("settings.asr.save")
+              )}
+            </Button>
+            {asrSaveError && (
+              <p className="mt-1.5 text-sm text-destructive text-center">{asrSaveError}</p>
+            )}
+          </div>
         </CardContent>
       </Card>
-
-      <Button onClick={handleSave} className="w-full" size="lg">
-        {saved ? (
-          <>
-            <Check className="mr-2 h-4 w-4" />
-            {t("settings.saved")}
-          </>
-        ) : (
-          t("settings.save")
-        )}
-      </Button>
-      {saveError && (
-        <p className="text-sm text-destructive text-center">{saveError}</p>
-      )}
     </div>
     </div>
   );
