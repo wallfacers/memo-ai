@@ -12,6 +12,7 @@ interface MeetingStore {
   setMeetings: (meetings: Meeting[]) => void;
   setCurrentMeeting: (meeting: Meeting | null) => void;
   setCurrentMeetingStatus: (status: MeetingStatus) => void;
+  updateMeetingTitle: (id: number, title: string) => void;
   setTranscripts: (transcripts: Transcript[]) => void;
   appendTranscript: (transcript: Transcript) => void;
   setActionItems: (items: ActionItem[]) => void;
@@ -35,6 +36,14 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
       meetings: state.meetings.map((m) =>
         state.currentMeeting && m.id === state.currentMeeting.id ? { ...m, status } : m
       ),
+    })),
+  updateMeetingTitle: (id, title) =>
+    set((state) => ({
+      meetings: state.meetings.map((m) => (m.id === id ? { ...m, title } : m)),
+      currentMeeting:
+        state.currentMeeting?.id === id
+          ? { ...state.currentMeeting, title }
+          : state.currentMeeting,
     })),
   setTranscripts: (transcripts) => set({ transcripts }),
   appendTranscript: (transcript) =>

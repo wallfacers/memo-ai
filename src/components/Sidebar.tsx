@@ -28,7 +28,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
-  const { meetings, setMeetings, setError } = useMeetingStore();
+  const { meetings, setMeetings, setError, updateMeetingTitle } = useMeetingStore();
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Meeting[] | null>(null);
@@ -117,11 +117,7 @@ export function Sidebar() {
     if (trimmed) {
       try {
         await renameMeetingCmd(id, trimmed);
-        setMeetings(
-          useMeetingStore.getState().meetings.map((m) =>
-            m.id === id ? { ...m, title: trimmed } : m
-          )
-        );
+        updateMeetingTitle(id, trimmed);
         if (searchResults) {
           setSearchResults(
             searchResults.map((m) => (m.id === id ? { ...m, title: trimmed } : m))
