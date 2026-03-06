@@ -52,7 +52,7 @@ export interface LlmProvider {
   api_key: string | null;
 }
 
-export type AsrProviderType = "local_whisper" | "aliyun";
+export type AsrProviderType = "local_whisper" | "aliyun" | "funasr";
 
 export interface AppSettings {
   llm_provider: LlmProvider;
@@ -64,6 +64,10 @@ export interface AppSettings {
   aliyun_asr_app_key: string;
   aliyun_asr_access_key_id: string;
   aliyun_asr_access_key_secret: string;
+  funasr_ws_url: string;
+  funasr_server_path: string;
+  funasr_port: number;
+  funasr_enabled: boolean;
 }
 
 export interface PipelineResult {
@@ -71,4 +75,29 @@ export interface PipelineResult {
   summary: string;
   report: string;
   generated_title?: string;
+}
+
+export type RecordingPhase =
+  | "idle"
+  | "connecting"
+  | "recording"
+  | "stopping"
+  | "batch_transcribing"
+  | "merging"
+  | "pipeline"
+  | "done"
+  | "error";
+
+export interface StreamingSegment {
+  text: string;
+  is_final: boolean;
+  segment_id: number;
+  start_ms: number | null;
+  end_ms: number | null;
+}
+
+export interface PipelineStageDoneEvent {
+  stage: number;  // 1-6
+  name: string;
+  summary: string;
 }

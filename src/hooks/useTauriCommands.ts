@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { Meeting, Transcript, ActionItem, AppSettings, PipelineResult } from "../types";
+import type { Meeting, Transcript, ActionItem, AppSettings, PipelineResult, StreamingSegment } from "../types";
 
 // Meeting commands
 export function useListMeetings() {
@@ -135,6 +135,39 @@ export function useTestAsrConnection() {
   return useCallback(
     (settings: AppSettings) =>
       invoke<AsrTestResult>("test_asr_connection", { settings }),
+    []
+  );
+}
+
+// FunASR hooks
+export interface FunAsrCheckResult {
+  found: boolean;
+  message: string;
+}
+
+export interface FunAsrStopResult {
+  segments: StreamingSegment[];
+}
+
+export function useStartFunAsrSession() {
+  return useCallback(
+    (meetingId: number) =>
+      invoke<void>("start_funasr_session", { meetingId }),
+    []
+  );
+}
+
+export function useStopFunAsrSession() {
+  return useCallback(
+    () => invoke<FunAsrStopResult>("stop_funasr_session"),
+    []
+  );
+}
+
+export function useCheckFunAsrServer() {
+  return useCallback(
+    (serverPath: string) =>
+      invoke<FunAsrCheckResult>("check_funasr_server", { serverPath }),
     []
   );
 }

@@ -21,6 +21,10 @@ const defaultSettings: AppSettings = {
   aliyun_asr_app_key: "",
   aliyun_asr_access_key_id: "",
   aliyun_asr_access_key_secret: "",
+  funasr_ws_url: "",
+  funasr_server_path: "",
+  funasr_port: 10095,
+  funasr_enabled: false,
 };
 
 export const useSettingsStore = create<SettingsStore>((set) => ({

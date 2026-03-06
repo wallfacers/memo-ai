@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Meeting, Transcript, ActionItem, MeetingStatus } from "../types";
+import type { Meeting, Transcript, ActionItem, MeetingStatus, RecordingPhase, StreamingSegment, PipelineStageDoneEvent } from "../types";
 
 interface MeetingStore {
   meetings: Meeting[];
@@ -18,6 +18,21 @@ interface MeetingStore {
   setActionItems: (items: ActionItem[]) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+
+  // 录音生命周期状态
+  recordingPhase: RecordingPhase;
+  recordingError: string | null;
+  // 实时字幕（FunASR 流式结果）
+  realtimeSegments: StreamingSegment[];
+  // Pipeline 各阶段进度
+  pipelineStages: PipelineStageDoneEvent[];
+
+  // Actions
+  setRecordingPhase: (phase: RecordingPhase, error?: string) => void;
+  appendRealtimeSegment: (seg: StreamingSegment) => void;
+  clearRealtimeSegments: () => void;
+  appendPipelineStage: (stage: PipelineStageDoneEvent) => void;
+  clearPipelineStages: () => void;
 }
 
 export const useMeetingStore = create<MeetingStore>((set) => ({
@@ -51,4 +66,28 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
   setActionItems: (actionItems) => set({ actionItems }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
+
+  recordingPhase: "idle",
+  recordingError: null,
+  realtimeSegments: [],
+  pipelineStages: [],
+
+  setRecordingPhase: (phase, error) => set({
+    recordingPhase: phase,
+    recordingError: error ?? null,
+  }),
+  appendRealtimeSegment: (seg) =>
+    set((state) => {
+      // 用 segment_id 去重：相同 id 的 segment 替换（partial→final 更新）
+      const filtered = state.realtimeSegments.filter(
+        (s) => s.segment_id !== seg.segment_id
+      );
+      return { realtimeSegments: [...filtered, seg] };
+    }),
+  clearRealtimeSegments: () => set({ realtimeSegments: [] }),
+  appendPipelineStage: (stage) =>
+    set((state) => ({
+      pipelineStages: [...state.pipelineStages, stage],
+    })),
+  clearPipelineStages: () => set({ pipelineStages: [] }),
 }));
