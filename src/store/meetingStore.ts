@@ -32,6 +32,9 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
   setCurrentMeetingStatus: (status) =>
     set((state) => ({
       currentMeeting: state.currentMeeting ? { ...state.currentMeeting, status } : null,
+      meetings: state.meetings.map((m) =>
+        state.currentMeeting && m.id === state.currentMeeting.id ? { ...m, status } : m
+      ),
     })),
   setTranscripts: (transcripts) => set({ transcripts }),
   appendTranscript: (transcript) =>
