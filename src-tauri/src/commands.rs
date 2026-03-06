@@ -463,6 +463,58 @@ pub fn search_meetings(
     Ok(meetings)
 }
 
+// ─── LLM Test Command ─────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct LlmTestResult {
+    pub success: bool,
+    pub message: String,
+    pub latency_ms: u64,
+}
+
+#[tauri::command]
+pub fn test_llm_connection(settings: AppConfig) -> Result<LlmTestResult, String> {
+    use std::time::Instant;
+
+    let cfg = LlmConfig {
+        provider: settings.llm_provider.provider_type.clone(),
+        base_url: settings.llm_provider.base_url.clone(),
+        model: settings.llm_provider.model.clone(),
+        api_key: settings.llm_provider.api_key.clone(),
+    };
+
+    let client = cfg.build_client();
+    let start = Instant::now();
+
+    match client.complete("Hi") {
+        Ok(_) => {
+            let ms = start.elapsed().as_millis() as u64;
+            Ok(LlmTestResult {
+                success: true,
+                message: format!("连接正常 ({}ms)", ms),
+                latency_ms: ms,
+            })
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            let friendly = if msg.contains("Connection refused") || msg.contains("connect error") {
+                format!("无法连接到 {}，请确认服务已启动", settings.llm_provider.base_url)
+            } else if msg.contains("401") || msg.contains("Unauthorized") {
+                "API Key 无效，请检查配置".to_string()
+            } else if msg.contains("model") && msg.contains("not found") {
+                format!("模型 '{}' 不存在，请确认模型名称", settings.llm_provider.model)
+            } else {
+                msg
+            };
+            Ok(LlmTestResult {
+                success: false,
+                message: friendly,
+                latency_ms: 0,
+            })
+        }
+    }
+}
+
 // ─── Settings Commands ────────────────────────────────────────────────────────
 
 #[tauri::command]

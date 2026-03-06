@@ -18,7 +18,9 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useSettingsStore } from "@/store/settingsStore";
 import type { AppSettings } from "@/types";
-import { Check } from "lucide-react";
+import { Check, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { useTestLlmConnection } from "@/hooks/useTauriCommands";
+import type { LlmTestResult } from "@/hooks/useTauriCommands";
 import { useTranslation } from "react-i18next";
 import i18n, { saveLang } from "@/i18n";
 
@@ -30,6 +32,10 @@ export function Settings() {
   const savedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const getSettings = useGetSettings();
   const saveSettings = useSaveSettings();
+  const testLlmConnection = useTestLlmConnection();
+  type TestStatus = "idle" | "testing" | "ok" | "fail";
+  const [llmTestStatus, setLlmTestStatus] = React.useState<TestStatus>("idle");
+  const [llmTestResult, setLlmTestResult] = React.useState<LlmTestResult | null>(null);
   const { t } = useTranslation();
   const [currentLang, setCurrentLang] = useState(i18n.language);
 
@@ -111,12 +117,14 @@ export function Settings() {
             <label className="text-sm font-medium text-foreground">{t("settings.llm.provider")}</label>
             <Select
               value={local.llm_provider.type}
-              onValueChange={(v) =>
+              onValueChange={(v) => {
                 setLocal({
                   ...local,
                   llm_provider: { ...local.llm_provider, type: v as "ollama" | "openai" },
-                })
-              }
+                });
+                setLlmTestStatus("idle");
+                setLlmTestResult(null);
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -165,6 +173,42 @@ export function Settings() {
               />
             </div>
           )}
+          <div className="flex items-center gap-3 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={llmTestStatus === "testing"}
+              onClick={async () => {
+                setLlmTestStatus("testing");
+                setLlmTestResult(null);
+                try {
+                  const result = await testLlmConnection(local);
+                  setLlmTestResult(result);
+                  setLlmTestStatus(result.success ? "ok" : "fail");
+                } catch (e) {
+                  setLlmTestResult({ success: false, message: String(e), latency_ms: 0 });
+                  setLlmTestStatus("fail");
+                }
+              }}
+            >
+              {llmTestStatus === "testing" ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : null}
+              测试连接
+            </Button>
+            {llmTestStatus === "ok" && llmTestResult && (
+              <span className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {llmTestResult.message}
+              </span>
+            )}
+            {llmTestStatus === "fail" && llmTestResult && (
+              <span className="flex items-center gap-1 text-xs text-destructive">
+                <XCircle className="h-3.5 w-3.5" />
+                {llmTestResult.message}
+              </span>
+            )}
+          </div>
         </CardContent>
       </Card>
 

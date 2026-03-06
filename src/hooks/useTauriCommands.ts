@@ -97,3 +97,14 @@ export function useSaveSettings() {
     []
   );
 }
+
+export interface LlmTestResult {
+  success: boolean;
+  message: string;
+  latency_ms: number;
+}
+
+export function useTestLlmConnection() {
+  return (settings: AppSettings) =>
+    invoke<LlmTestResult>("test_llm_connection", { settings });
+}
