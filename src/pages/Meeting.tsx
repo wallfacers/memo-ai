@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { useParams, useLocation } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import {
   useGetMeeting,
@@ -32,6 +32,8 @@ const statusBadge: Record<
 export function Meeting() {
   const { id } = useParams<{ id: string }>();
   const meetingId = id ? parseInt(id) : null;
+  const location = useLocation();
+  const autoRecordRef = useRef(location.state?.autoRecord === true);
 
   const {
     currentMeeting,
@@ -88,6 +90,14 @@ export function Meeting() {
     void fetchTranscripts();
     void fetchActionItems();
   }, [meetingId, getMeeting, getTranscripts, getActionItems, setCurrentMeeting, setTranscripts, setActionItems]);
+
+  // Auto-start recording when navigated from Home quick-start
+  useEffect(() => {
+    if (autoRecordRef.current && currentMeeting?.status === "idle") {
+      autoRecordRef.current = false;
+      startRecording();
+    }
+  }, [currentMeeting, startRecording]);
 
   async function handleStopAndProcess() {
     const audioPath = await stopRecording();
