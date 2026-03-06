@@ -30,4 +30,8 @@
 
 ---
 
-_当前无进行中的计划。_
+## 当前计划
+
+| 文件 | 目标 | 状态 |
+|------|------|------|
+| [04-asr-pluggable-llm-test.md](./04-asr-pluggable-llm-test.md) | ASR 可插拔后端 + LLM 连接测试 | 待执行 |

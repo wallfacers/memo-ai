@@ -8,12 +8,12 @@
 
 ### MVP 完成标准
 
-- [ ] Windows 上可以录制麦克风音频
-- [ ] Whisper.cpp 成功完成本地转写
-- [ ] 6 阶段 LLM Pipeline 顺序执行完成
-- [ ] 前端展示转写文本、行动项、会议总结
-- [ ] 支持 Ollama 和 OpenAI 两种后端
-- [ ] 会议记录持久化到 SQLite
+- [x] Windows 上可以录制麦克风音频
+- [x] Whisper.cpp 成功完成本地转写（代码层面完成，需配置 whisper-cli 可执行文件）
+- [x] 6 阶段 LLM Pipeline 顺序执行完成
+- [x] 前端展示转写文本、行动项、会议总结
+- [x] 支持 Ollama 和 OpenAI 两种后端
+- [x] 会议记录持久化到 SQLite
 
 ## 下一步：v1.0
 
