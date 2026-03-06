@@ -1,14 +1,21 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@/components/ui/badge";
+import {
+  useGetMeeting,
+  useGetTranscripts,
+  useGetActionItems,
+  useTranscribeAudio,
+  useRunPipeline,
+  useUpdateActionItemStatus,
+} from "@/hooks/useTauriCommands";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordButton } from "@/components/RecordButton";
 import { TranscriptView } from "@/components/TranscriptView";
 import { ActionItemList } from "@/components/ActionItemList";
 import { useMeetingStore } from "@/store/meetingStore";
 import { useRecording } from "@/hooks/useRecording";
-import type { Meeting as MeetingType, Transcript, ActionItem } from "@/types";
+import type { Meeting as MeetingType } from "@/types";
 
 const statusBadge: Record<
   MeetingType["status"],
@@ -36,19 +43,25 @@ export function Meeting() {
   } = useMeetingStore();
 
   const { isRecording, error, startRecording, stopRecording } = useRecording(meetingId);
+  const getMeeting = useGetMeeting();
+  const getTranscripts = useGetTranscripts();
+  const getActionItems = useGetActionItems();
+  const transcribeAudio = useTranscribeAudio();
+  const runPipeline = useRunPipeline();
+  const updateActionItemStatus = useUpdateActionItemStatus();
 
   async function loadMeeting() {
-    const meeting = await invoke<MeetingType>("get_meeting", { id: meetingId });
+    const meeting = await getMeeting(meetingId!);
     setCurrentMeeting(meeting);
   }
 
   async function loadTranscripts() {
-    const data = await invoke<Transcript[]>("get_transcripts", { meetingId });
+    const data = await getTranscripts(meetingId!);
     setTranscripts(data);
   }
 
   async function loadActionItems() {
-    const data = await invoke<ActionItem[]>("get_action_items", { meetingId });
+    const data = await getActionItems(meetingId!);
     setActionItems(data);
   }
 
@@ -63,11 +76,11 @@ export function Meeting() {
   async function handleStopAndProcess() {
     const audioPath = await stopRecording();
     if (!audioPath || !meetingId) return;
-    await invoke("transcribe_audio", { audioPath, meetingId });
+    await transcribeAudio(audioPath, meetingId);
     await loadTranscripts();
     setCurrentMeetingStatus("processing");
     try {
-      await invoke("run_pipeline", { meetingId });
+      await runPipeline(meetingId);
       setCurrentMeetingStatus("completed");
       await loadMeeting();
       await loadActionItems();
@@ -77,7 +90,7 @@ export function Meeting() {
   }
 
   async function handleToggleActionItem(itemId: number, status: "pending" | "done") {
-    await invoke("update_action_item_status", { id: itemId, status });
+    await updateActionItemStatus(itemId, status);
     await loadActionItems();
   }
 

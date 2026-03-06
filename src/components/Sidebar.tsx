@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
 import { Mic, Settings, Plus } from "lucide-react";
+import { useListMeetings, useCreateMeeting } from "@/hooks/useTauriCommands";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -24,9 +24,11 @@ export function Sidebar() {
   const { meetings, setMeetings, setError } = useMeetingStore();
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
+  const listMeetings = useListMeetings();
+  const createMeetingCmd = useCreateMeeting();
 
   useEffect(() => {
-    invoke<Meeting[]>("list_meetings")
+    listMeetings()
       .then(setMeetings)
       .catch((e) => setError(String(e)));
   }, [setMeetings, setError]);
@@ -35,7 +37,7 @@ export function Sidebar() {
     const title = newTitle.trim() || `会议 ${new Date().toLocaleString("zh-CN")}`;
     try {
       setCreating(true);
-      const meeting = await invoke<Meeting>("create_meeting", { title });
+      const meeting = await createMeetingCmd(title);
       setMeetings([meeting, ...useMeetingStore.getState().meetings]);
       setNewTitle("");
       navigate(`/meeting/${meeting.id}`);

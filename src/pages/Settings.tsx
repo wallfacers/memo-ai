@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
+import { useGetSettings, useSaveSettings } from "@/hooks/useTauriCommands";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -26,9 +26,11 @@ export function Settings() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const savedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const getSettings = useGetSettings();
+  const saveSettings = useSaveSettings();
 
   useEffect(() => {
-    invoke<AppSettings>("get_settings")
+    getSettings()
       .then((s) => {
         setSettings(s);
         setLocal(s);
@@ -44,7 +46,7 @@ export function Settings() {
 
   async function handleSave() {
     try {
-      await invoke("save_settings", { settings: local });
+      await saveSettings(local);
       setSettings(local);
       setSaved(true);
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
