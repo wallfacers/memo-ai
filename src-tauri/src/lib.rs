@@ -31,7 +31,17 @@ pub fn run() {
 
             app.manage(DbState(Mutex::new(conn)));
             app.manage(RecordState(Mutex::new(None)));
-            app.manage(ConfigState(Mutex::new(commands::AppConfig::default())));
+
+            let settings_path = data_dir.join("settings.json");
+            let config = if settings_path.exists() {
+                std::fs::read_to_string(&settings_path)
+                    .ok()
+                    .and_then(|s| serde_json::from_str::<commands::AppConfig>(&s).ok())
+                    .unwrap_or_default()
+            } else {
+                commands::AppConfig::default()
+            };
+            app.manage(ConfigState(Mutex::new(config)));
 
             Ok(())
         })
