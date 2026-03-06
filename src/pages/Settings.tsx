@@ -36,7 +36,7 @@ export function Settings() {
         setLocal(s);
       })
       .catch(() => {});
-  }, [setSettings]);
+  }, [getSettings, setSettings]);
 
   useEffect(() => {
     return () => {

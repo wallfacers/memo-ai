@@ -251,7 +251,7 @@ pub fn run_pipeline(
     let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
     let output = pipeline.run(&transcript_text, auto_titled).map_err(|e| e.to_string())?;
 
-    // Save action items
+    // Save action items, structure, summary/report, and title atomically in one lock
     {
         let conn = (*db).0.lock().unwrap();
         for item in &output.action_items {
@@ -280,13 +280,12 @@ pub fn run_pipeline(
         // Update meeting summary + report
         models::update_meeting_summary_report(&conn, meeting_id, &output.summary, &output.report)
             .map_err(|e| e.to_string())?;
-    }
 
-    // Update title if AI generated one
-    if let Some(ref title) = output.generated_title {
-        let conn = (*db).0.lock().unwrap();
-        models::update_meeting_title(&conn, meeting_id, title)
-            .map_err(|e| e.to_string())?;
+        // Update title if AI generated one (same lock — atomic with status update)
+        if let Some(ref title) = output.generated_title {
+            models::update_meeting_title(&conn, meeting_id, title)
+                .map_err(|e| e.to_string())?;
+        }
     }
 
     Ok(PipelineResult {
