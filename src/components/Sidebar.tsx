@@ -31,7 +31,7 @@ export function Sidebar() {
     listMeetings()
       .then(setMeetings)
       .catch((e) => setError(String(e)));
-  }, [setMeetings, setError]);
+  }, [listMeetings, setMeetings, setError]);
 
   async function createMeeting() {
     const title = newTitle.trim() || `会议 ${new Date().toLocaleString("zh-CN")}`;

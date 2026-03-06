@@ -67,24 +67,38 @@ export function Meeting() {
 
   useEffect(() => {
     if (!meetingId) return;
-    void loadMeeting();
-    void loadTranscripts();
-    void loadActionItems();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingId]);
+
+    async function fetchMeeting() {
+      const meeting = await getMeeting(meetingId!);
+      setCurrentMeeting(meeting);
+    }
+    async function fetchTranscripts() {
+      const data = await getTranscripts(meetingId!);
+      setTranscripts(data);
+    }
+    async function fetchActionItems() {
+      const data = await getActionItems(meetingId!);
+      setActionItems(data);
+    }
+
+    void fetchMeeting();
+    void fetchTranscripts();
+    void fetchActionItems();
+  }, [meetingId, getMeeting, getTranscripts, getActionItems, setCurrentMeeting, setTranscripts, setActionItems]);
 
   async function handleStopAndProcess() {
     const audioPath = await stopRecording();
     if (!audioPath || !meetingId) return;
-    await transcribeAudio(audioPath, meetingId);
-    await loadTranscripts();
     setCurrentMeetingStatus("processing");
     try {
+      await transcribeAudio(audioPath, meetingId);
+      await loadTranscripts();
       await runPipeline(meetingId);
-      setCurrentMeetingStatus("completed");
       await loadMeeting();
       await loadActionItems();
-    } catch {
+      setCurrentMeetingStatus("completed");
+    } catch (e) {
+      console.error("Processing failed:", e);
       setCurrentMeetingStatus("error");
     }
   }
