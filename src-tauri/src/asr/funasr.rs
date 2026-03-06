@@ -131,6 +131,10 @@ fn run_ws_loop(
             Ok(Some(pcm_bytes)) => {
                 if let Err(e) = ws.send(Message::Binary(pcm_bytes)) {
                     log::warn!("FunASR audio send failed: {}", e);
+                    // 尝试通知服务器会话结束，即使连接已断
+                    let _ = ws.send(Message::Text(
+                        serde_json::json!({"is_speaking": false}).to_string()
+                    ));
                     break;
                 }
             }
@@ -176,9 +180,12 @@ fn run_ws_loop(
                             // 转发给 event channel（Tauri emit）
                             let _ = event_tx.try_send(seg.clone());
 
-                            // final 结果也存入 result channel（供 finish() 收集）
+                            // final 结果存入 result channel（供 finish() 收集），阻塞确保不丢失
                             if is_final {
-                                let _ = result_tx.try_send(seg);
+                                if let Err(e) = result_tx.send(seg) {
+                                    log::warn!("FunASR result channel disconnected, dropping final segment: {}", e);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -202,10 +209,6 @@ fn run_ws_loop(
             _ => {}
         }
 
-        // 3. 发送结束信号后，稍作等待避免忙轮询
-        if finish_sent {
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
     }
 
     Ok(())
@@ -220,8 +223,10 @@ impl StreamingAsrSession for FunAsrStreamSession {
     }
 
     fn finish(&mut self) -> AppResult<Vec<StreamingSegment>> {
-        // 发送结束信号（None 触发 is_speaking=false）
-        let _ = self.audio_tx.try_send(None);
+        // 发送结束信号（None 触发 is_speaking=false），阻塞确保信号不丢失
+        if let Err(e) = self.audio_tx.send(None) {
+            log::warn!("FunASR audio channel disconnected before finish signal: {}", e);
+        }
 
         // 收集所有 final 结果，最长等待 8 秒
         let mut finals = Vec::new();
