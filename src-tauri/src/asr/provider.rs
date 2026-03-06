@@ -17,6 +17,12 @@ pub fn build_asr(config: &AppConfig) -> Box<dyn AsrProvider> {
             &config.language,
         )),
         _ => {
+            if config.asr_provider != "local_whisper" {
+                log::warn!(
+                    "Unknown asr_provider '{}', falling back to local_whisper",
+                    config.asr_provider
+                );
+            }
             let model_path = format!(
                 "{}/ggml-{}.bin",
                 config.whisper_model_dir, config.whisper_model

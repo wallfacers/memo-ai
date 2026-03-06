@@ -25,7 +25,7 @@ impl AsrProvider for WhisperAsr {
     fn transcribe(&self, audio_path: &Path) -> AppResult<Vec<TranscriptSegment>> {
         let output = std::process::Command::new(&self.cli_path)
             .arg("-f")
-            .arg(audio_path.to_str().unwrap_or(""))
+            .arg(audio_path.to_str().ok_or_else(|| AppError::Asr("Audio path contains non-UTF-8 characters".to_string()))?)
             .arg("-m")
             .arg(&self.model_path)
             .arg("-l")
