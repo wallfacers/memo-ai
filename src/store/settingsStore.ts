@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AppSettings, AsrProviderType } from "../types";
+import type { AppSettings } from "../types";
 
 interface SettingsStore {
   settings: AppSettings;
@@ -17,7 +17,7 @@ const defaultSettings: AppSettings = {
   language: "zh",
   whisper_cli_path: "whisper-cli",
   whisper_model_dir: "models",
-  asr_provider: "local_whisper" as AsrProviderType,
+  asr_provider: "local_whisper",
   aliyun_asr_app_key: "",
   aliyun_asr_access_key_id: "",
   aliyun_asr_access_key_secret: "",
