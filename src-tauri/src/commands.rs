@@ -189,14 +189,15 @@ pub async fn transcribe_audio(
     let cfg = (*config).0.lock().unwrap().clone();
     let path = PathBuf::from(&audio_path);
 
-    // 在独立阻塞线程中运行 whisper 子进程，避免阻塞 IPC 通道
-    let segments = tauri::async_runtime::spawn_blocking(move || {
+    // 在独立 OS 线程中运行 whisper 子进程（完全脱离 Tokio 上下文，避免运行时冲突）
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || {
         let asr = build_asr(&cfg);
-        asr.transcribe(&path)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())?;
+        let _ = tx.send(asr.transcribe(&path));
+    });
+    let segments = rx.await
+        .map_err(|_| "ASR thread panicked".to_string())?
+        .map_err(|e| e.to_string())?;
 
     let conn = (*db).0.lock().unwrap();
     let mut full_text = String::new();
@@ -289,15 +290,16 @@ pub async fn run_pipeline(
             .unwrap_or(false)
     };
 
-    // 在独立阻塞线程中运行 LLM pipeline，避免 reqwest::blocking 阻塞 IPC 通道
-    let output = tauri::async_runtime::spawn_blocking(move || {
+    // 在独立 OS 线程中运行 LLM pipeline（完全脱离 Tokio 上下文，避免 reqwest::blocking 运行时冲突）
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || {
         let client = llm_config.build_client();
         let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
-        pipeline.run(&transcript_text, auto_titled)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())?;
+        let _ = tx.send(pipeline.run(&transcript_text, auto_titled));
+    });
+    let output = rx.await
+        .map_err(|_| "LLM pipeline thread panicked".to_string())?
+        .map_err(|e| e.to_string())?;
 
     // 快速 DB 写入
     {
