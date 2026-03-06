@@ -530,7 +530,7 @@ pub fn check_whisper_cli(cli_path: String) -> Result<WhisperCheckResult, String>
         .arg("--version")
         .output()
     {
-        Ok(out) => {
+        Ok(out) if out.status.success() || !out.stdout.is_empty() || !out.stderr.is_empty() => {
             let version_raw = String::from_utf8_lossy(&out.stderr)
                 .lines()
                 .next()
@@ -548,6 +548,11 @@ pub fn check_whisper_cli(cli_path: String) -> Result<WhisperCheckResult, String>
                 message: format!("找到 whisper-cli: {}", cli_path),
             })
         }
+        Ok(_) => Ok(WhisperCheckResult {
+            found: false,
+            version: None,
+            message: format!("找到可执行文件但运行异常: {}", cli_path),
+        }),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(WhisperCheckResult {
             found: false,
             version: None,

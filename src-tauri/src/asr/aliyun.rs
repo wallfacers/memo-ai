@@ -112,11 +112,14 @@ impl AsrProvider for AliyunAsr {
             .and_then(|e| e.to_str())
             .unwrap_or("wav");
 
-        let url = format!(
-            "https://nls-gateway.cn-shanghai.aliyuncs.com/api/v1/recognition/flash?appkey={}&format={}&sample_rate=16000",
-            url_encode(&self.app_key),
-            url_encode(format)
-        );
+        let mut url = reqwest::Url::parse(
+            "https://nls-gateway.cn-shanghai.aliyuncs.com/api/v1/recognition/flash"
+        ).map_err(|e| AppError::Asr(format!("Invalid URL: {}", e)))?;
+        url.query_pairs_mut()
+            .append_pair("appkey", &self.app_key)
+            .append_pair("format", format)
+            .append_pair("sample_rate", "16000");
+        let url = url.to_string();
 
         let resp = client
             .post(&url)
@@ -173,16 +176,4 @@ pub fn test_connection(app_key: &str, ak_id: &str, ak_secret: &str) -> Result<St
     asr.get_token()
         .map(|_| "阿里云 ASR 鉴权成功".to_string())
         .map_err(|e| e.to_string())
-}
-
-fn url_encode(s: &str) -> String {
-    s.chars()
-        .flat_map(|c| {
-            if c.is_alphanumeric() || "-_.~".contains(c) {
-                vec![c]
-            } else {
-                format!("%{:02X}", c as u32).chars().collect::<Vec<_>>()
-            }
-        })
-        .collect()
 }
