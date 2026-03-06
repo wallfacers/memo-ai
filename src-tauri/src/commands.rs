@@ -19,6 +19,9 @@ pub struct FunAsrState(pub Mutex<Option<FunAsrSessionHolder>>);
 pub struct FunAsrSessionHolder {
     pub session: Box<dyn StreamingAsrSession>,
     pub collected_finals: Vec<StreamingSegment>,
+    // 持有 FunAsrServer，确保进程在 session 整个生命周期内存活
+    // session drop 时自动触发 FunAsrServer::drop() → 进程终止
+    server: Option<crate::process::FunAsrServer>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +45,7 @@ pub struct AppConfig {
     pub funasr_server_path: String,
     #[serde(default = "default_funasr_port")]
     pub funasr_port: u16,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub funasr_enabled: bool,
 }
 
@@ -51,7 +54,6 @@ fn default_asr_provider() -> String {
 }
 
 fn default_funasr_port() -> u16 { 10095 }
-fn default_true() -> bool { true }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmProviderConfig {
@@ -682,6 +684,15 @@ pub fn start_funasr_session(
     use crate::asr::funasr::FunAsrStreamSession;
 
     let cfg = (*config).0.lock().unwrap().clone();
+
+    // 检查是否已有 session 在运行，避免重复启动
+    {
+        let guard = (*funasr).0.lock().unwrap();
+        if guard.is_some() {
+            return Err("FunASR session already running. Call stop_funasr_session first.".into());
+        }
+    }
+
     if !cfg.funasr_enabled {
         return Ok(()); // 未启用，静默跳过
     }
@@ -699,7 +710,6 @@ pub fn start_funasr_session(
     let (event_tx, event_rx) = std::sync::mpsc::sync_channel::<StreamingSegment>(128);
     let app_clone = app_handle.clone();
     std::thread::spawn(move || {
-        let _server = server; // 持有进程，确保生命周期与 session 绑定
         loop {
             match event_rx.recv() {
                 Ok(seg) => {
@@ -748,6 +758,7 @@ pub fn start_funasr_session(
     *funasr_guard = Some(FunAsrSessionHolder {
         session: Box::new(session),
         collected_finals: Vec::new(),
+        server: Some(server),
     });
 
     Ok(())
