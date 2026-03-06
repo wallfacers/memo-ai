@@ -65,16 +65,31 @@ impl<'a> Pipeline<'a> {
         self.client.complete(&prompt)
     }
 
-    /// Stage 3: Extract structured info (JSON).
-    pub fn stage3_structure(&self, meeting_text: &str) -> AppResult<StructuredMeeting> {
-        let template = self.load_prompt("03_structure.txt")?;
-        let prompt = Self::fill_template(&template, "meeting_text", meeting_text);
-        log::info!("Running pipeline stage 3: structure extraction");
-        let response = self.client.complete(&prompt)?;
-        // Extract JSON from response (LLM may wrap in markdown code blocks)
-        let json_str = extract_json(&response);
-        serde_json::from_str(json_str)
-            .map_err(|e| AppError::Llm(format!("Failed to parse structure JSON: {}. Response: {}", e, response)))
+    /// Stage 3: Extract structured info (JSON). Falls back to empty struct on parse failure.
+    pub fn stage3_structure(&self, meeting_text: &str) -> StructuredMeeting {
+        let result = (|| -> AppResult<StructuredMeeting> {
+            let template = self.load_prompt("03_structure.txt")?;
+            let prompt = Self::fill_template(&template, "meeting_text", meeting_text);
+            log::info!("Running pipeline stage 3: structure extraction");
+            let response = self.client.complete(&prompt)?;
+            let json_str = extract_json(&response);
+            serde_json::from_str(json_str)
+                .map_err(|e| AppError::Llm(format!("Stage 3 JSON parse failed: {}. Raw: {}", e, response)))
+        })();
+
+        match result {
+            Ok(s) => s,
+            Err(e) => {
+                log::warn!("Stage 3 failed, using empty structure: {}", e);
+                StructuredMeeting {
+                    topic: None,
+                    participants: vec![],
+                    key_points: vec![],
+                    decisions: vec![],
+                    risks: vec![],
+                }
+            }
+        }
     }
 
     /// Stage 4: Generate meeting summary.
@@ -85,15 +100,25 @@ impl<'a> Pipeline<'a> {
         self.client.complete(&prompt)
     }
 
-    /// Stage 5: Extract action items (JSON array).
-    pub fn stage5_actions(&self, meeting_text: &str) -> AppResult<Vec<ActionItemRaw>> {
-        let template = self.load_prompt("05_actions.txt")?;
-        let prompt = Self::fill_template(&template, "meeting_text", meeting_text);
-        log::info!("Running pipeline stage 5: action items");
-        let response = self.client.complete(&prompt)?;
-        let json_str = extract_json(&response);
-        serde_json::from_str(json_str)
-            .map_err(|e| AppError::Llm(format!("Failed to parse action items JSON: {}. Response: {}", e, response)))
+    /// Stage 5: Extract action items (JSON array). Falls back to empty vec on parse failure.
+    pub fn stage5_actions(&self, meeting_text: &str) -> Vec<ActionItemRaw> {
+        let result = (|| -> AppResult<Vec<ActionItemRaw>> {
+            let template = self.load_prompt("05_actions.txt")?;
+            let prompt = Self::fill_template(&template, "meeting_text", meeting_text);
+            log::info!("Running pipeline stage 5: action items");
+            let response = self.client.complete(&prompt)?;
+            let json_str = extract_json(&response);
+            serde_json::from_str(json_str)
+                .map_err(|e| AppError::Llm(format!("Stage 5 JSON parse failed: {}. Raw: {}", e, response)))
+        })();
+
+        match result {
+            Ok(items) => items,
+            Err(e) => {
+                log::warn!("Stage 5 failed, returning empty action items: {}", e);
+                vec![]
+            }
+        }
     }
 
     /// Stage 6: Generate final report.
@@ -121,9 +146,9 @@ impl<'a> Pipeline<'a> {
     pub fn run(&self, raw_transcript: &str, auto_titled: bool) -> AppResult<PipelineOutput> {
         let clean = self.stage1_clean(raw_transcript)?;
         let organized = self.stage2_speaker(&clean)?;
-        let structure = self.stage3_structure(&organized)?;
+        let structure = self.stage3_structure(&organized);
         let summary = self.stage4_summary(&organized)?;
-        let action_items = self.stage5_actions(&organized)?;
+        let action_items = self.stage5_actions(&organized);
         let actions_json = serde_json::to_string(&action_items)?;
         let report = self.stage6_report(&summary, &actions_json)?;
 
