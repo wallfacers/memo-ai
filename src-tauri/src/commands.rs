@@ -180,17 +180,23 @@ pub fn get_transcripts(
 }
 
 #[tauri::command]
-pub fn transcribe_audio(
+pub async fn transcribe_audio(
     audio_path: String,
     meeting_id: i64,
     db: State<'_, DbState>,
     config: State<'_, ConfigState>,
 ) -> Result<String, String> {
     let cfg = (*config).0.lock().unwrap().clone();
-    let asr = build_asr(&cfg);
-
     let path = PathBuf::from(&audio_path);
-    let segments = asr.transcribe(&path).map_err(|e| e.to_string())?;
+
+    // 在独立阻塞线程中运行 whisper 子进程，避免阻塞 IPC 通道
+    let segments = tauri::async_runtime::spawn_blocking(move || {
+        let asr = build_asr(&cfg);
+        asr.transcribe(&path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
 
     let conn = (*db).0.lock().unwrap();
     let mut full_text = String::new();
@@ -221,7 +227,7 @@ pub struct PipelineResult {
 }
 
 #[tauri::command]
-pub fn run_pipeline(
+pub async fn run_pipeline(
     meeting_id: i64,
     _app_handle: tauri::AppHandle,
     db: State<'_, DbState>,
@@ -234,7 +240,6 @@ pub fn run_pipeline(
         model: cfg.llm_provider.model,
         api_key: cfg.llm_provider.api_key,
     };
-    let client = llm_config.build_client();
 
     // Prompts directory resolution (in priority order):
     // 1. <exe>/prompts  — production bundle
@@ -256,7 +261,7 @@ pub fn run_pipeline(
         }
     };
 
-    // Collect transcript text
+    // 快速 DB 读取，在 await 前释放锁
     let transcript_text = {
         let conn = (*db).0.lock().unwrap();
         let segments = models::get_transcripts(&conn, meeting_id).map_err(|e| e.to_string())?;
@@ -284,10 +289,17 @@ pub fn run_pipeline(
             .unwrap_or(false)
     };
 
-    let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
-    let output = pipeline.run(&transcript_text, auto_titled).map_err(|e| e.to_string())?;
+    // 在独立阻塞线程中运行 LLM pipeline，避免 reqwest::blocking 阻塞 IPC 通道
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        let client = llm_config.build_client();
+        let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
+        pipeline.run(&transcript_text, auto_titled)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
 
-    // Save action items, structure, summary/report, and title atomically in one lock
+    // 快速 DB 写入
     {
         let conn = (*db).0.lock().unwrap();
         for item in &output.action_items {
@@ -317,7 +329,7 @@ pub fn run_pipeline(
         models::update_meeting_summary_report(&conn, meeting_id, &output.summary, &output.report)
             .map_err(|e| e.to_string())?;
 
-        // Update title if AI generated one (same lock — atomic with status update)
+        // Update title if AI generated one
         if let Some(ref title) = output.generated_title {
             models::update_meeting_title(&conn, meeting_id, title)
                 .map_err(|e| e.to_string())?;

@@ -206,7 +206,7 @@ export function Settings() {
                     })
                   }
                   placeholder={t("settings.llm.apiKeyPlaceholder")}
-                  className="flex-1"
+                  className="flex-1 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
                 />
                 <Button
                   variant="ghost"
@@ -454,7 +454,7 @@ export function Settings() {
                     value={local.aliyun_asr_access_key_secret}
                     onChange={(e) => setLocal({ ...local, aliyun_asr_access_key_secret: e.target.value })}
                     placeholder={t("settings.asr.accessKeySecret")}
-                    className="flex-1"
+                    className="flex-1 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
                   />
                   <Button
                     variant="ghost"
