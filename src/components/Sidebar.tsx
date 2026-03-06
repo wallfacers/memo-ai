@@ -62,7 +62,10 @@ export function Sidebar() {
       style={{ background: "var(--sidebar-background)" }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2 px-4 py-4">
+      <button
+        onClick={() => navigate("/")}
+        className="flex items-center gap-2 px-4 py-4 w-full text-left hover:opacity-80 transition-opacity"
+      >
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Mic className="h-4 w-4" />
         </div>
@@ -70,7 +73,7 @@ export function Sidebar() {
           <p className="text-sm font-semibold leading-none">Memo AI</p>
           <p className="text-[10px] text-muted-foreground leading-none mt-0.5">AI 会议助手</p>
         </div>
-      </div>
+      </button>
 
       <Separator />
 
