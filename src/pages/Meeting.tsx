@@ -153,7 +153,7 @@ export function Meeting() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="transcript" className="flex-1 flex flex-col overflow-hidden px-6 pt-4">
+      <Tabs defaultValue="transcript" className="flex-1 flex flex-col overflow-hidden min-h-0 px-6 pt-4">
         <TabsList className="shrink-0">
           <TabsTrigger value="transcript">转写</TabsTrigger>
           <TabsTrigger value="actions">行动项</TabsTrigger>
@@ -161,7 +161,7 @@ export function Meeting() {
           <TabsTrigger value="report">报告</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="transcript" className="flex-1 overflow-auto mt-4">
+        <TabsContent value="transcript" className="flex-1 overflow-hidden min-h-0 mt-4">
           <TranscriptView transcripts={transcripts} />
         </TabsContent>
 
