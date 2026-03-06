@@ -79,7 +79,8 @@ export function Sidebar() {
   }, [renamingId]);
 
   async function createMeeting() {
-    const title = `会议 ${new Date().toLocaleString("zh-CN")}`;
+    const now = new Date();
+    const title = `会议 ${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
     try {
       setCreating(true);
       const meeting = await createMeetingCmd(title, true);

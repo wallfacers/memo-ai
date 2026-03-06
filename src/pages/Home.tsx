@@ -14,7 +14,9 @@ export function Home() {
     if (creating) return;
     setCreating(true);
     try {
-      const meeting = await createMeeting(`会议 ${new Date().toLocaleString("zh-CN")}`, true);
+      const now = new Date();
+      const title = `会议 ${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+      const meeting = await createMeeting(title, true);
       setMeetings([meeting, ...useMeetingStore.getState().meetings]);
       navigate(`/meeting/${meeting.id}`, { state: { autoRecord: true } });
     } finally {
