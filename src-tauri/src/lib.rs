@@ -7,8 +7,8 @@ mod llm;
 
 use commands::{
     ConfigState, DbState, RecordState,
-    create_meeting, delete_meeting, get_action_items, get_meeting, get_settings,
-    get_transcripts, list_meetings, run_pipeline, save_settings, start_recording,
+    create_meeting, delete_meeting, export_report, get_action_items, get_meeting, get_settings,
+    get_transcripts, list_meetings, run_pipeline, save_settings, search_meetings, start_recording,
     stop_recording, transcribe_audio, update_action_item_status,
 };
 use std::sync::Mutex;
@@ -20,6 +20,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Initialize SQLite database
             let data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
@@ -67,6 +68,8 @@ pub fn run() {
             run_pipeline,
             get_action_items,
             update_action_item_status,
+            export_report,
+            search_meetings,
             get_settings,
             save_settings,
         ])

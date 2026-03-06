@@ -319,6 +319,122 @@ pub fn update_action_item_status(
     models::update_action_item_status(&conn, id, &status).map_err(|e| e.to_string())
 }
 
+// ─── Export / Search Commands ─────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn export_report(
+    meeting_id: i64,
+    path: String,
+    db: State<'_, DbState>,
+) -> Result<(), String> {
+    let conn = (*db).0.lock().unwrap();
+
+    let (title, start_time): (String, String) = conn.query_row(
+        "SELECT title, start_time FROM meetings WHERE id = ?1",
+        rusqlite::params![meeting_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).map_err(|e| e.to_string())?;
+
+    let (summary, report): (Option<String>, Option<String>) = conn.query_row(
+        "SELECT summary, report FROM meetings WHERE id = ?1",
+        rusqlite::params![meeting_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).map_err(|e| e.to_string())?;
+
+    let mut stmt = conn.prepare(
+        "SELECT task, owner, deadline, status FROM action_items WHERE meeting_id = ?1 ORDER BY id"
+    ).map_err(|e| e.to_string())?;
+
+    let action_lines: Vec<String> = stmt.query_map(
+        rusqlite::params![meeting_id],
+        |row| {
+            let task: String = row.get(0)?;
+            let owner: Option<String> = row.get(1)?;
+            let deadline: Option<String> = row.get(2)?;
+            let status: String = row.get(3)?;
+            Ok((task, owner, deadline, status))
+        },
+    ).map_err(|e| e.to_string())?
+    .filter_map(|r| r.ok())
+    .map(|(task, owner, deadline, status)| {
+        let checkbox = if status == "done" { "[x]" } else { "[ ]" };
+        let meta = match (owner, deadline) {
+            (Some(o), Some(d)) => format!("（{} / {}）", o, d),
+            (Some(o), None) => format!("（{}）", o),
+            (None, Some(d)) => format!("（{}）", d),
+            (None, None) => String::new(),
+        };
+        format!("- {} {}{}", checkbox, task, meta)
+    })
+    .collect();
+
+    let mut md = String::new();
+    md.push_str(&format!("# {}\n\n", title));
+    md.push_str(&format!("**日期：** {}\n\n", start_time));
+
+    md.push_str("## 会议总结\n\n");
+    md.push_str(summary.as_deref().unwrap_or("（暂无总结）"));
+    md.push_str("\n\n");
+
+    md.push_str("## 行动项\n\n");
+    if action_lines.is_empty() {
+        md.push_str("（暂无行动项）\n");
+    } else {
+        for line in &action_lines {
+            md.push_str(line);
+            md.push('\n');
+        }
+    }
+    md.push('\n');
+
+    md.push_str("## 完整报告\n\n");
+    md.push_str(report.as_deref().unwrap_or("（暂无报告）"));
+    md.push('\n');
+
+    std::fs::write(&path, md).map_err(|e| format!("Write file failed: {}", e))?;
+    log::info!("Report exported to: {}", path);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn search_meetings(
+    query: String,
+    db: State<'_, DbState>,
+) -> Result<Vec<Meeting>, String> {
+    let conn = (*db).0.lock().unwrap();
+    let pattern = format!("%{}%", query);
+    let mut stmt = conn.prepare(
+        "SELECT id, title, start_time, end_time, status, summary, report, audio_path, auto_titled, created_at, updated_at
+         FROM meetings
+         WHERE title LIKE ?1 OR summary LIKE ?1
+         ORDER BY start_time DESC"
+    ).map_err(|e| e.to_string())?;
+
+    let meetings = stmt.query_map(
+        rusqlite::params![pattern],
+        |row| {
+            let auto_titled_int: i64 = row.get(8)?;
+            Ok(Meeting {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                start_time: row.get(2)?,
+                end_time: row.get(3)?,
+                status: row.get(4)?,
+                summary: row.get(5)?,
+                report: row.get(6)?,
+                audio_path: row.get(7)?,
+                auto_titled: auto_titled_int != 0,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+            })
+        },
+    ).map_err(|e| e.to_string())?
+    .filter_map(|r| r.ok())
+    .collect();
+
+    Ok(meetings)
+}
+
 // ─── Settings Commands ────────────────────────────────────────────────────────
 
 #[tauri::command]
