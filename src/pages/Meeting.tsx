@@ -3,7 +3,10 @@ import { useParams, useLocation } from "react-router-dom";
 import { save } from "@tauri-apps/plugin-dialog";
 import { exportReport } from "@/hooks/useTauriCommands";
 import { useTranslation } from "react-i18next";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
+import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import {
   useGetMeeting,
   useGetTranscripts,
@@ -12,12 +15,17 @@ import {
   useRunPipeline,
   useUpdateActionItemStatus,
   useListMeetings,
+  useStartFunAsrSession,
+  useStopFunAsrSession,
 } from "@/hooks/useTauriCommands";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordButton } from "@/components/RecordButton";
 import { TranscriptView } from "@/components/TranscriptView";
 import { ActionItemList } from "@/components/ActionItemList";
+import { RealtimeTranscript } from "@/components/RealtimeTranscript";
+import { PipelineProgress } from "@/components/PipelineProgress";
 import { useMeetingStore } from "@/store/meetingStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { useRecording } from "@/hooks/useRecording";
 import type { Meeting as MeetingType } from "@/types";
 
@@ -46,8 +54,13 @@ export function Meeting() {
     setActionItems,
     setCurrentMeetingStatus,
     setMeetings,
+    recordingPhase,
+    setRecordingPhase,
+    clearRealtimeSegments,
+    clearPipelineStages,
   } = useMeetingStore();
 
+  const { settings } = useSettingsStore();
   const { isRecording, error, startRecording, stopRecording } = useRecording(meetingId);
   const getMeeting = useGetMeeting();
   const getTranscripts = useGetTranscripts();
@@ -56,6 +69,8 @@ export function Meeting() {
   const runPipeline = useRunPipeline();
   const updateActionItemStatus = useUpdateActionItemStatus();
   const listMeetings = useListMeetings();
+  const startFunAsrSession = useStartFunAsrSession();
+  const stopFunAsrSession = useStopFunAsrSession();
 
   async function loadMeeting() {
     const meeting = await getMeeting(meetingId!);
@@ -96,18 +111,52 @@ export function Meeting() {
   useEffect(() => {
     if (autoRecordRef.current && currentMeeting?.status === "idle") {
       autoRecordRef.current = false;
-      startRecording();
+      void handleStartRecording();
     }
-  }, [currentMeeting, startRecording]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMeeting]);
 
-  async function handleStopAndProcess() {
-    const audioPath = await stopRecording();
-    if (!audioPath || !meetingId) return;
-    setCurrentMeetingStatus("processing");
+  async function handleStartRecording() {
+    setRecordingPhase("connecting");
+    clearRealtimeSegments();
+    clearPipelineStages();
     try {
+      if (settings.funasr_enabled) {
+        await startFunAsrSession(meetingId!);
+      }
+      await startRecording();
+      setRecordingPhase("recording");
+    } catch (e) {
+      console.error("Start recording failed:", e);
+      setRecordingPhase("error");
+    }
+  }
+
+  async function handleStopRecording() {
+    setRecordingPhase("stopping");
+    try {
+      if (settings.funasr_enabled) {
+        await stopFunAsrSession();
+      }
+
+      const audioPath = await stopRecording();
+      if (!audioPath || !meetingId) {
+        setRecordingPhase("error");
+        return;
+      }
+
+      setCurrentMeetingStatus("processing");
+      setRecordingPhase("batch_transcribing");
       await transcribeAudio(audioPath, meetingId);
       await loadTranscripts();
+
+      setRecordingPhase("merging");
+      await new Promise((r) => setTimeout(r, 500));
+
+      setRecordingPhase("pipeline");
       await runPipeline(meetingId);
+
+      setRecordingPhase("done");
       await loadMeeting();
       await loadActionItems();
       const updatedMeetings = await listMeetings();
@@ -115,6 +164,7 @@ export function Meeting() {
       setCurrentMeetingStatus("completed");
     } catch (e) {
       console.error("Processing failed:", e);
+      setRecordingPhase("error");
       setCurrentMeetingStatus("error");
     }
   }
@@ -146,17 +196,42 @@ export function Meeting() {
 
       {/* Record area */}
       <div className="flex flex-col items-center gap-3 py-6 border-b border-border shrink-0">
+        {/* 录音阶段状态栏 */}
+        {recordingPhase !== "idle" && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {recordingPhase === "connecting" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>连接中…</span></>}
+            {recordingPhase === "recording" && <><span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" /><span>录音中</span></>}
+            {recordingPhase === "stopping" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>正在停止…</span></>}
+            {recordingPhase === "batch_transcribing" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>精确转写中…</span></>}
+            {recordingPhase === "merging" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>智能合并中…</span></>}
+            {recordingPhase === "pipeline" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>AI 分析中…</span></>}
+            {recordingPhase === "done" && <><CheckCircle2 className="h-3.5 w-3.5 text-green-600" /><span>完成</span></>}
+            {recordingPhase === "error" && <><XCircle className="h-3.5 w-3.5 text-destructive" /><span>出错</span></>}
+          </div>
+        )}
+
         <RecordButton
           isRecording={isRecording}
           disabled={currentMeeting.status === "processing"}
-          onStart={startRecording}
-          onStop={handleStopAndProcess}
+          onStart={handleStartRecording}
+          onStop={handleStopRecording}
         />
+
         {currentMeeting.status === "processing" && (
           <p className="text-sm text-amber-500 font-medium">{t("meeting.processingNotice")}</p>
         )}
         {error && (
           <p className="text-sm text-destructive">{error}</p>
+        )}
+
+        {/* 录音时实时字幕 */}
+        {(recordingPhase === "recording" || recordingPhase === "stopping") && settings.funasr_enabled && (
+          <RealtimeTranscript />
+        )}
+
+        {/* Pipeline 进度 */}
+        {(recordingPhase === "pipeline" || recordingPhase === "done") && (
+          <PipelineProgress />
         )}
       </div>
 
@@ -179,8 +254,10 @@ export function Meeting() {
 
         <TabsContent value="summary" className="flex-1 overflow-auto mt-4">
           {currentMeeting.summary ? (
-            <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-              {currentMeeting.summary}
+            <div className="p-4 text-sm leading-relaxed text-foreground prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {currentMeeting.summary}
+              </ReactMarkdown>
             </div>
           ) : (
             <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -211,8 +288,10 @@ export function Meeting() {
             </button>
           </div>
           {currentMeeting.report ? (
-            <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed whitespace-pre-wrap font-mono text-foreground">
-              {currentMeeting.report}
+            <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed text-foreground prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {currentMeeting.report}
+              </ReactMarkdown>
             </div>
           ) : (
             <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Meeting, Transcript, ActionItem, MeetingStatus } from "../types";
+import type { Meeting, Transcript, ActionItem, MeetingStatus, RecordingPhase, StreamingSegment, PipelineStageDoneEvent } from "../types";
 
 interface MeetingStore {
   meetings: Meeting[];
@@ -8,6 +8,9 @@ interface MeetingStore {
   actionItems: ActionItem[];
   isLoading: boolean;
   error: string | null;
+  recordingPhase: RecordingPhase;
+  realtimeSegments: StreamingSegment[];
+  pipelineStages: PipelineStageDoneEvent[];
 
   setMeetings: (meetings: Meeting[]) => void;
   setCurrentMeeting: (meeting: Meeting | null) => void;
@@ -18,6 +21,11 @@ interface MeetingStore {
   setActionItems: (items: ActionItem[]) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setRecordingPhase: (phase: RecordingPhase) => void;
+  appendRealtimeSegment: (segment: StreamingSegment) => void;
+  clearRealtimeSegments: () => void;
+  appendPipelineStage: (stage: PipelineStageDoneEvent) => void;
+  clearPipelineStages: () => void;
 }
 
 export const useMeetingStore = create<MeetingStore>((set) => ({
@@ -27,6 +35,9 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
   actionItems: [],
   isLoading: false,
   error: null,
+  recordingPhase: "idle",
+  realtimeSegments: [],
+  pipelineStages: [],
 
   setMeetings: (meetings) => set({ meetings }),
   setCurrentMeeting: (meeting) => set({ currentMeeting: meeting, transcripts: [], actionItems: [] }),
@@ -51,4 +62,11 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
   setActionItems: (actionItems) => set({ actionItems }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
+  setRecordingPhase: (phase) => set({ recordingPhase: phase }),
+  appendRealtimeSegment: (segment) =>
+    set((state) => ({ realtimeSegments: [...state.realtimeSegments, segment] })),
+  clearRealtimeSegments: () => set({ realtimeSegments: [] }),
+  appendPipelineStage: (stage) =>
+    set((state) => ({ pipelineStages: [...state.pipelineStages, stage] })),
+  clearPipelineStages: () => set({ pipelineStages: [] }),
 }));

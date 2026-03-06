@@ -138,3 +138,28 @@ export function useTestAsrConnection() {
     []
   );
 }
+
+// FunASR commands
+export function useStartFunAsrSession() {
+  return useCallback(
+    (meetingId: number) => invoke<void>("start_funasr_session", { meetingId }),
+    []
+  );
+}
+
+export function useStopFunAsrSession() {
+  return useCallback(() => invoke<void>("stop_funasr_session"), []);
+}
+
+export interface FunAsrCheckResult {
+  found: boolean;
+  message: string;
+}
+
+export function useCheckFunAsrServer() {
+  return useCallback(
+    (serverPath: string) =>
+      invoke<FunAsrCheckResult>("check_funasr_server", { serverPath }),
+    []
+  );
+}

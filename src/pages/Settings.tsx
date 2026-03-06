@@ -21,8 +21,9 @@ import { useSettingsStore } from "@/store/settingsStore";
 import type { AppSettings } from "@/types";
 import type { AsrProviderType } from "@/types";
 import { Check, Loader2, CheckCircle2, XCircle, Eye, EyeOff } from "lucide-react";
-import { useTestLlmConnection, useCheckWhisperCli, useTestAsrConnection } from "@/hooks/useTauriCommands";
-import type { LlmTestResult, WhisperCheckResult, AsrTestResult } from "@/hooks/useTauriCommands";
+import { useTestLlmConnection, useCheckWhisperCli, useTestAsrConnection, useCheckFunAsrServer } from "@/hooks/useTauriCommands";
+import type { LlmTestResult, WhisperCheckResult, AsrTestResult, FunAsrCheckResult } from "@/hooks/useTauriCommands";
+import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "react-i18next";
 import i18n, { saveLang } from "@/i18n";
 
@@ -50,12 +51,15 @@ export function Settings() {
   const [llmTestResult, setLlmTestResult] = React.useState<LlmTestResult | null>(null);
   const checkWhisperCli = useCheckWhisperCli();
   const testAsrConnection = useTestAsrConnection();
+  const checkFunAsrServer = useCheckFunAsrServer();
   const [whisperCheck, setWhisperCheck] = React.useState<WhisperCheckResult | null>(null);
   const [whisperChecking, setWhisperChecking] = React.useState(false);
   const [asrTestResult, setAsrTestResult] = React.useState<AsrTestResult | null>(null);
   const [asrTesting, setAsrTesting] = React.useState(false);
   const [showAliyunSecret, setShowAliyunSecret] = React.useState(false);
   const [showLlmApiKey, setShowLlmApiKey] = React.useState(false);
+  const [funAsrChecking, setFunAsrChecking] = React.useState(false);
+  const [funAsrCheckResult, setFunAsrCheckResult] = React.useState<FunAsrCheckResult | null>(null);
   const { t } = useTranslation();
   const [currentLang, setCurrentLang] = useState(i18n.language);
 
@@ -299,6 +303,7 @@ export function Settings() {
               <SelectContent>
                 <SelectItem value="local_whisper">{t("settings.asr.localWhisper")}</SelectItem>
                 <SelectItem value="aliyun">{t("settings.asr.aliyunProvider")}</SelectItem>
+                <SelectItem value="funasr">FunASR（本地）</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -500,6 +505,89 @@ export function Settings() {
                     {asrTestResult.message}
                   </span>
                 )}
+              </div>
+            </>
+          )}
+
+          {/* FunASR 面板 */}
+          {local.asr_provider === "funasr" && (
+            <>
+              {/* 启用实时字幕开关 */}
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">启用实时字幕</label>
+                <Switch
+                  checked={local.funasr_enabled}
+                  onCheckedChange={(v) => setLocal({ ...local, funasr_enabled: v })}
+                />
+              </div>
+
+              {/* WebSocket 地址 */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">WebSocket 地址</label>
+                <Input
+                  value={local.funasr_ws_url}
+                  onChange={(e) => setLocal({ ...local, funasr_ws_url: e.target.value })}
+                  placeholder="留空则自动管理本地服务"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  示例：ws://localhost:10095 · 留空则检测并自动启动本地 funasr-server
+                </p>
+              </div>
+
+              {/* funasr-server 路径（仅在 URL 为空时显示） */}
+              {local.funasr_ws_url === "" && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">funasr-server 路径</label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={local.funasr_server_path}
+                      onChange={(e) => setLocal({ ...local, funasr_server_path: e.target.value })}
+                      placeholder="funasr-server 或绝对路径"
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={funAsrChecking}
+                      onClick={async () => {
+                        setFunAsrChecking(true);
+                        setFunAsrCheckResult(null);
+                        try {
+                          const result = await checkFunAsrServer(local.funasr_server_path);
+                          setFunAsrCheckResult(result);
+                        } catch (e) {
+                          setFunAsrCheckResult({ found: false, message: String(e) });
+                        } finally {
+                          setFunAsrChecking(false);
+                        }
+                      }}
+                    >
+                      {funAsrChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "检测"}
+                    </Button>
+                  </div>
+                  {funAsrCheckResult && (
+                    <p className={`flex items-center gap-1 text-xs ${funAsrCheckResult.found ? "text-green-600" : "text-destructive"}`}>
+                      {funAsrCheckResult.found
+                        ? <CheckCircle2 className="h-3.5 w-3.5" />
+                        : <XCircle className="h-3.5 w-3.5" />}
+                      {funAsrCheckResult.message}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    安装：pip install funasr-runtime · 文档：github.com/modelscope/FunASR
+                  </p>
+                </div>
+              )}
+
+              {/* 端口配置 */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">监听端口</label>
+                <Input
+                  type="number"
+                  value={local.funasr_port}
+                  onChange={(e) => setLocal({ ...local, funasr_port: Number(e.target.value) })}
+                  placeholder="10095"
+                />
               </div>
             </>
           )}
