@@ -67,6 +67,11 @@ impl FunAsrStreamSession {
 
         Ok(FunAsrStreamSession { audio_tx, result_rx })
     }
+
+    /// 获取音频发送通道 clone，用于多线程 PCM 转发（绕过 trait 限制）
+    pub fn audio_sender(&self) -> std::sync::mpsc::SyncSender<Option<Vec<u8>>> {
+        self.audio_tx.clone()
+    }
 }
 
 /// 从 tungstenite MaybeTlsStream 内层设置 TCP read timeout

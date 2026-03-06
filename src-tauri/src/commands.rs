@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{State, Manager};
+use tauri::{State, Manager, Emitter};
 use serde::{Deserialize, Serialize};
 
 use crate::db::models::{self, Meeting, Transcript, ActionItem};
@@ -8,10 +8,18 @@ use crate::llm::client::LlmConfig;
 use crate::llm::pipeline::Pipeline;
 use crate::audio::capture::AudioCapture;
 use crate::asr::build_asr;
+use crate::asr::{StreamingAsrSession, StreamingSegment};
 
 pub struct DbState(pub Mutex<rusqlite::Connection>);
 pub struct RecordState(pub Mutex<Option<AudioCapture>>);
 pub struct ConfigState(pub Mutex<AppConfig>);
+
+pub struct FunAsrState(pub Mutex<Option<FunAsrSessionHolder>>);
+
+pub struct FunAsrSessionHolder {
+    pub session: Box<dyn StreamingAsrSession>,
+    pub collected_finals: Vec<StreamingSegment>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -28,11 +36,22 @@ pub struct AppConfig {
     pub aliyun_asr_access_key_id: String,
     #[serde(default)]
     pub aliyun_asr_access_key_secret: String,
+    #[serde(default)]
+    pub funasr_ws_url: String,
+    #[serde(default)]
+    pub funasr_server_path: String,
+    #[serde(default = "default_funasr_port")]
+    pub funasr_port: u16,
+    #[serde(default = "default_true")]
+    pub funasr_enabled: bool,
 }
 
 fn default_asr_provider() -> String {
     "local_whisper".into()
 }
+
+fn default_funasr_port() -> u16 { 10095 }
+fn default_true() -> bool { true }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmProviderConfig {
@@ -60,6 +79,10 @@ impl Default for AppConfig {
             aliyun_asr_app_key: String::new(),
             aliyun_asr_access_key_id: String::new(),
             aliyun_asr_access_key_secret: String::new(),
+            funasr_ws_url: String::new(),
+            funasr_server_path: String::new(),
+            funasr_port: 10095,
+            funasr_enabled: false,
         }
     }
 }
@@ -644,4 +667,122 @@ pub fn save_settings(
     std::fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
     *(*config).0.lock().unwrap() = settings;
     Ok(())
+}
+
+// ─── FunASR Streaming Commands ────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn start_funasr_session(
+    meeting_id: i64,
+    app_handle: tauri::AppHandle,
+    config: State<'_, ConfigState>,
+    funasr: State<'_, FunAsrState>,
+    recorder: State<'_, RecordState>,
+) -> Result<(), String> {
+    use crate::asr::funasr::FunAsrStreamSession;
+
+    let cfg = (*config).0.lock().unwrap().clone();
+    if !cfg.funasr_enabled {
+        return Ok(()); // 未启用，静默跳过
+    }
+
+    let server = crate::process::FunAsrServer::start(
+        &cfg.funasr_ws_url,
+        &cfg.funasr_server_path,
+        cfg.funasr_port,
+    )
+    .map_err(|e| format!("FunASR server start failed: {}", e))?;
+
+    let ws_url = server.ws_url.clone();
+
+    // 事件转发线程：接收 WS 识别结果 → Tauri emit
+    let (event_tx, event_rx) = std::sync::mpsc::sync_channel::<StreamingSegment>(128);
+    let app_clone = app_handle.clone();
+    std::thread::spawn(move || {
+        let _server = server; // 持有进程，确保生命周期与 session 绑定
+        loop {
+            match event_rx.recv() {
+                Ok(seg) => {
+                    let ev = if seg.is_final { "asr_final" } else { "asr_partial" };
+                    if let Err(e) = app_clone.emit(ev, &seg) {
+                        log::warn!("Failed to emit {} event: {}", ev, e);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    // 建立流式 WebSocket 会话
+    let session = FunAsrStreamSession::connect(&ws_url, meeting_id, event_tx)
+        .map_err(|e| format!("FunASR session connect failed: {}", e))?;
+
+    // 获取音频 sender（直接写入 WS 音频通道，无需经由 trait）
+    let audio_sender = session.audio_sender();
+
+    // 注册 PCM 块通道到 AudioCapture
+    let (pcm_tx, pcm_rx) = std::sync::mpsc::sync_channel::<Vec<i16>>(64);
+    {
+        let mut rec_guard = (*recorder).0.lock().unwrap();
+        if let Some(ref mut capture) = *rec_guard {
+            capture.set_chunk_sender(pcm_tx);
+        }
+    }
+
+    // 中转线程：Vec<i16> → Vec<u8> (LE) → FunASR audio channel
+    std::thread::spawn(move || {
+        loop {
+            match pcm_rx.recv() {
+                Ok(pcm) => {
+                    let bytes: Vec<u8> = pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
+                    if audio_sender.send(Some(bytes)).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let mut funasr_guard = (*funasr).0.lock().unwrap();
+    *funasr_guard = Some(FunAsrSessionHolder {
+        session: Box::new(session),
+        collected_finals: Vec::new(),
+    });
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+pub struct FunAsrStopResult {
+    pub segments: Vec<StreamingSegment>,
+}
+
+#[tauri::command]
+pub fn stop_funasr_session(
+    funasr: State<'_, FunAsrState>,
+) -> Result<FunAsrStopResult, String> {
+    let mut guard = (*funasr).0.lock().unwrap();
+    if let Some(ref mut holder) = *guard {
+        let segments = holder.session.finish().map_err(|e| e.to_string())?;
+        let result = FunAsrStopResult { segments };
+        *guard = None;
+        Ok(result)
+    } else {
+        Ok(FunAsrStopResult { segments: Vec::new() })
+    }
+}
+
+#[derive(Serialize)]
+pub struct FunAsrCheckResult {
+    pub found: bool,
+    pub message: String,
+}
+
+#[tauri::command]
+pub fn check_funasr_server(server_path: String) -> Result<FunAsrCheckResult, String> {
+    match crate::process::funasr_server::check_funasr_server(&server_path) {
+        Ok(version) => Ok(FunAsrCheckResult { found: true, message: version }),
+        Err(msg) => Ok(FunAsrCheckResult { found: false, message: msg }),
+    }
 }
