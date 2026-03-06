@@ -16,6 +16,7 @@ const defaultSettings: AppSettings = {
   whisper_model: "base",
   language: "zh",
   whisper_cli_path: "whisper-cli",
+  whisper_model_dir: "models",
 };
 
 export const useSettingsStore = create<SettingsStore>((set) => ({

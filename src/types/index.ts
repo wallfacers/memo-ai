@@ -57,6 +57,7 @@ export interface AppSettings {
   whisper_model: string;
   language: string;
   whisper_cli_path: string;
+  whisper_model_dir: string;
 }
 
 export interface PipelineResult {

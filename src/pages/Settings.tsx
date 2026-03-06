@@ -189,6 +189,22 @@ export function Settings() {
               下载：github.com/ggerganov/whisper.cpp/releases
             </p>
           </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">
+              模型文件目录
+            </label>
+            <Input
+              value={local.whisper_model_dir}
+              onChange={(e) =>
+                setLocal({ ...local, whisper_model_dir: e.target.value })
+              }
+              placeholder="models"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              存放 ggml-*.bin 模型文件的目录路径
+            </p>
+          </div>
         </CardContent>
       </Card>
 
