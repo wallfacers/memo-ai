@@ -6,6 +6,14 @@ pub trait LlmClient: Send + Sync {
     /// Send a prompt and return the completion text.
     fn complete(&self, prompt: &str) -> AppResult<String>;
 
+    /// Send a prompt and stream the response token by token.
+    /// Returns the full accumulated response when done.
+    fn complete_streaming(
+        &self,
+        prompt: &str,
+        on_token: Box<dyn Fn(&str) + Send>,
+    ) -> AppResult<String>;
+
     /// Return the provider name for logging.
     fn provider_name(&self) -> &str;
 }
