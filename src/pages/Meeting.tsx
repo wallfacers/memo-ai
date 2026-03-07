@@ -24,6 +24,7 @@ import { TranscriptView } from "@/components/TranscriptView";
 import { ActionItemList } from "@/components/ActionItemList";
 import { RealtimeTranscript } from "@/components/RealtimeTranscript";
 import { PipelineProgress } from "@/components/PipelineProgress";
+import { SummaryTab } from "@/components/SummaryTab";
 import { useMeetingStore } from "@/store/meetingStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useRecording } from "@/hooks/useRecording";
@@ -174,6 +175,12 @@ export function Meeting() {
     await loadActionItems();
   }
 
+  function handleSummaryUpdated(newSummary: string) {
+    if (currentMeeting) {
+      setCurrentMeeting({ ...currentMeeting, summary: newSummary });
+    }
+  }
+
   if (!currentMeeting) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -253,17 +260,10 @@ export function Meeting() {
         </TabsContent>
 
         <TabsContent value="summary" className="flex-1 overflow-auto mt-4">
-          {currentMeeting.summary ? (
-            <div className="p-4 text-sm leading-relaxed text-foreground prose prose-sm max-w-none dark:prose-invert">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {currentMeeting.summary}
-              </ReactMarkdown>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-              {t("meeting.noSummary")}
-            </div>
-          )}
+          <SummaryTab
+            meeting={currentMeeting}
+            onSummaryUpdated={handleSummaryUpdated}
+          />
         </TabsContent>
 
         <TabsContent value="report" className="flex-1 overflow-auto mt-4">
