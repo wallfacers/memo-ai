@@ -17,6 +17,7 @@ import {
   useListMeetings,
   useStartFunAsrSession,
   useStopFunAsrSession,
+  useRetryPipelineFromStage,
 } from "@/hooks/useTauriCommands";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordButton } from "@/components/RecordButton";
@@ -59,6 +60,7 @@ export function Meeting() {
     setRecordingPhase,
     clearRealtimeSegments,
     clearPipelineStages,
+    setPipelineFailedStage,
   } = useMeetingStore();
 
   const { settings } = useSettingsStore();
@@ -68,6 +70,7 @@ export function Meeting() {
   const getActionItems = useGetActionItems();
   const transcribeAudio = useTranscribeAudio();
   const runPipeline = useRunPipeline();
+  const retryPipelineFromStage = useRetryPipelineFromStage();
   const updateActionItemStatus = useUpdateActionItemStatus();
   const listMeetings = useListMeetings();
   const startFunAsrSession = useStartFunAsrSession();
@@ -175,6 +178,27 @@ export function Meeting() {
     await loadActionItems();
   }
 
+  async function handleRetryFromStage(stage: number) {
+    if (!meetingId) return;
+    setPipelineFailedStage(null);
+    clearPipelineStages();
+    setRecordingPhase("pipeline");
+    setCurrentMeetingStatus("processing");
+    try {
+      await retryPipelineFromStage(meetingId, stage);
+      setRecordingPhase("done");
+      await loadMeeting();
+      await loadActionItems();
+      const updatedMeetings = await listMeetings();
+      setMeetings(updatedMeetings);
+      setCurrentMeetingStatus("completed");
+    } catch (e) {
+      console.error("Pipeline retry failed:", e);
+      setRecordingPhase("error");
+      setCurrentMeetingStatus("error");
+    }
+  }
+
   function handleSummaryUpdated(newSummary: string) {
     if (currentMeeting) {
       setCurrentMeeting({ ...currentMeeting, summary: newSummary });
@@ -237,8 +261,10 @@ export function Meeting() {
         )}
 
         {/* Pipeline 进度 */}
-        {(recordingPhase === "pipeline" || recordingPhase === "done") && (
-          <PipelineProgress />
+        {(recordingPhase === "pipeline" ||
+          recordingPhase === "done" ||
+          recordingPhase === "error") && (
+          <PipelineProgress onRetryFromStage={handleRetryFromStage} />
         )}
       </div>
 
