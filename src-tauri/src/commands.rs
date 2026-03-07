@@ -369,6 +369,12 @@ pub async fn regenerate_summary_stream(
             }
         };
 
+        // Stage 4 开始通知
+        let _ = app_for_cb.emit("summary_stage", SummaryStageEvent {
+            stage: 4,
+            name: "正在生成摘要...".into(),
+        });
+
         // Stage 4 (streaming)
         let app_for_token = app_for_cb.clone();
         let on_token: Box<dyn Fn(&str) + Send> = Box::new(move |token: &str| {
@@ -399,8 +405,12 @@ pub async fn regenerate_summary_stream(
             models::update_meeting_summary(&conn, meeting_id, &summary)
                 .map_err(|e| e.to_string())?;
         }
-        Ok(Err(e)) => return Err(e),
-        Err(_) => return Err("Stream thread panicked".into()),
+        Ok(Err(_)) => {}   // 错误已通过 summary_error 事件发出
+        Err(_) => {
+            let _ = app_handle.emit("summary_error", SummaryErrorEvent {
+                message: "Stream thread panicked".into(),
+            });
+        }
     }
 
     Ok(())
