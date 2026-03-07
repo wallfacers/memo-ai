@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::db::models::{self, Meeting, Transcript, ActionItem};
 use crate::llm::client::LlmConfig;
-use crate::llm::pipeline::Pipeline;
+use crate::llm::pipeline::{Pipeline, PipelineOutput};
 use crate::audio::capture::AudioCapture;
 use crate::asr::build_asr;
 use crate::asr::{StreamingAsrSession, StreamingSegment};
@@ -474,6 +474,12 @@ pub struct PipelineStageDoneEvent {
     pub summary: String,
 }
 
+#[derive(Serialize, Clone)]
+pub struct PipelineStageFailed {
+    pub stage: u32,
+    pub error: String,
+}
+
 #[derive(Clone, Serialize)]
 pub struct SummaryStageEvent {
     pub stage: u8,
@@ -569,59 +575,152 @@ pub async fn run_pipeline(
     // 在独立 OS 线程中运行 LLM pipeline（完全脱离 Tokio 上下文，避免 reqwest::blocking 运行时冲突）
     let (tx, rx) = tokio::sync::oneshot::channel();
     let app_for_cb = app_handle.clone();
-    let stage_cb: crate::llm::pipeline::StageCallback = Box::new(move |stage, name, summary| {
-        let _ = app_for_cb.emit("pipeline_stage_done", PipelineStageDoneEvent {
-            stage,
-            name: name.to_string(),
-            summary: summary.to_string(),
-        });
-    });
     std::thread::spawn(move || {
         let client = llm_config.build_client();
-        let pipeline = Pipeline::new(client.as_ref(), &prompts_dir)
-            .with_callback(stage_cb);
-        let _ = tx.send(pipeline.run(&transcript_text, auto_titled));
+        let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
+        let db_state = app_for_cb.state::<DbState>();
+
+        macro_rules! run_stage {
+            ($stage_num:expr, $name:expr, $result:expr, $summary_fn:expr) => {
+                match $result {
+                    Ok(val) => {
+                        app_for_cb.emit("pipeline_stage_done", PipelineStageDoneEvent {
+                            stage: $stage_num,
+                            name: $name.to_string(),
+                            summary: $summary_fn(&val),
+                        }).ok();
+                        val
+                    }
+                    Err(e) => {
+                        app_for_cb.emit("pipeline_stage_failed", PipelineStageFailed {
+                            stage: $stage_num,
+                            error: e.to_string(),
+                        }).ok();
+                        let _ = tx.send(Err(e));
+                        return;
+                    }
+                }
+            };
+        }
+
+        // Stage 1
+        let clean = run_stage!(1, "文本清洗",
+            pipeline.stage1_clean(&transcript_text),
+            |v: &String| format!("完成（共 {} 字）", v.len()));
+        {
+            let conn = db_state.0.lock().unwrap();
+            let _ = models::update_clean_transcript(&conn, meeting_id, &clean);
+        }
+
+        // Stage 2
+        let organized = run_stage!(2, "说话人整理",
+            pipeline.stage2_speaker(&clean),
+            |v: &String| v.chars().take(50).collect::<String>());
+        {
+            let conn = db_state.0.lock().unwrap();
+            let _ = models::update_organized_transcript(&conn, meeting_id, &organized);
+        }
+
+        // Stage 3 (infallible)
+        let structure = pipeline.stage3_structure(&organized);
+        let s3_summary = format!(
+            "主题：{} · 参会 {} 人 · {} 项决策",
+            structure.topic.as_deref().unwrap_or("未知"),
+            structure.participants.len(),
+            structure.decisions.len(),
+        );
+        app_for_cb.emit("pipeline_stage_done", PipelineStageDoneEvent {
+            stage: 3,
+            name: "结构化提取".to_string(),
+            summary: s3_summary,
+        }).ok();
+        {
+            let conn = db_state.0.lock().unwrap();
+            let _ = models::upsert_meeting_structure(
+                &conn, meeting_id,
+                structure.topic.as_deref(),
+                &structure.participants,
+                &structure.key_points,
+                &structure.decisions,
+                &structure.risks,
+            );
+        }
+
+        // Stage 4
+        let summary = run_stage!(4, "会议总结",
+            pipeline.stage4_summary(&organized),
+            |v: &String| v.chars().take(100).collect::<String>());
+        {
+            let conn = db_state.0.lock().unwrap();
+            let _ = models::update_meeting_summary(&conn, meeting_id, &summary);
+        }
+
+        // Stage 5 (infallible)
+        let action_items = pipeline.stage5_actions(&organized);
+        app_for_cb.emit("pipeline_stage_done", PipelineStageDoneEvent {
+            stage: 5,
+            name: "行动项提取".to_string(),
+            summary: format!("共 {} 项行动", action_items.len()),
+        }).ok();
+        {
+            let conn = db_state.0.lock().unwrap();
+            for item in &action_items {
+                let _ = models::insert_action_item(
+                    &conn, meeting_id,
+                    &item.task, item.owner.as_deref(), item.deadline.as_deref(),
+                );
+            }
+        }
+
+        // Stage 6
+        let actions_json = match serde_json::to_string(&action_items) {
+            Ok(j) => j,
+            Err(e) => {
+                app_for_cb.emit("pipeline_stage_failed", PipelineStageFailed {
+                    stage: 6,
+                    error: e.to_string(),
+                }).ok();
+                let _ = tx.send(Err(crate::error::AppError::Llm(e.to_string())));
+                return;
+            }
+        };
+        let report = run_stage!(6, "报告生成",
+            pipeline.stage6_report(&summary, &actions_json),
+            |_: &String| "报告已生成，点击查看".to_string());
+        {
+            let conn = db_state.0.lock().unwrap();
+            let _ = models::update_meeting_summary_report(&conn, meeting_id, &summary, &report);
+        }
+
+        // Stage 7 (optional title)
+        let generated_title = if auto_titled {
+            match pipeline.stage7_title(&summary) {
+                Ok(t) => {
+                    let conn = db_state.0.lock().unwrap();
+                    let _ = models::update_meeting_title(&conn, meeting_id, &t);
+                    Some(t)
+                }
+                Err(e) => {
+                    log::warn!("Stage 7 title generation failed: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let _ = tx.send(Ok(PipelineOutput {
+            clean_transcript: clean,
+            structure,
+            summary,
+            action_items,
+            report,
+            generated_title,
+        }));
     });
     let output = rx.await
         .map_err(|_| "LLM pipeline thread panicked".to_string())?
         .map_err(|e| e.to_string())?;
-
-    // 快速 DB 写入
-    {
-        let conn = (*db).0.lock().unwrap();
-        for item in &output.action_items {
-            models::insert_action_item(
-                &conn,
-                meeting_id,
-                &item.task,
-                item.owner.as_deref(),
-                item.deadline.as_deref(),
-            )
-            .map_err(|e| e.to_string())?;
-        }
-
-        // Save structure
-        models::upsert_meeting_structure(
-            &conn,
-            meeting_id,
-            output.structure.topic.as_deref(),
-            &output.structure.participants,
-            &output.structure.key_points,
-            &output.structure.decisions,
-            &output.structure.risks,
-        )
-        .map_err(|e| e.to_string())?;
-
-        // Update meeting summary + report
-        models::update_meeting_summary_report(&conn, meeting_id, &output.summary, &output.report)
-            .map_err(|e| e.to_string())?;
-
-        // Update title if AI generated one
-        if let Some(ref title) = output.generated_title {
-            models::update_meeting_title(&conn, meeting_id, title)
-                .map_err(|e| e.to_string())?;
-        }
-    }
 
     Ok(PipelineResult {
         clean_transcript: output.clean_transcript,
