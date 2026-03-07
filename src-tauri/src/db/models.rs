@@ -269,3 +269,90 @@ pub fn upsert_meeting_structure(
     )?;
     Ok(())
 }
+
+// ─── Pipeline Intermediate State ──────────────────────────────────────────────
+
+pub fn update_clean_transcript(conn: &Connection, id: i64, text: &str) -> AppResult<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE meetings SET clean_transcript = ?1, updated_at = ?2 WHERE id = ?3",
+        params![text, now, id],
+    )?;
+    Ok(())
+}
+
+pub fn update_organized_transcript(conn: &Connection, id: i64, text: &str) -> AppResult<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE meetings SET organized_transcript = ?1, updated_at = ?2 WHERE id = ?3",
+        params![text, now, id],
+    )?;
+    Ok(())
+}
+
+pub fn get_pipeline_intermediates(
+    conn: &Connection,
+    id: i64,
+) -> AppResult<(Option<String>, Option<String>)> {
+    let result = conn.query_row(
+        "SELECT clean_transcript, organized_transcript FROM meetings WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    Ok(result)
+}
+
+pub fn delete_action_items_for_meeting(conn: &Connection, meeting_id: i64) -> AppResult<()> {
+    conn.execute(
+        "DELETE FROM action_items WHERE meeting_id = ?1",
+        params![meeting_id],
+    )?;
+    Ok(())
+}
+
+/// Clear pipeline results from a given stage onward.
+/// from_stage: 1=clean, 2=organized, 3=structure, 4=summary, 5=actions, 6=report
+pub fn clear_pipeline_from_stage(conn: &Connection, meeting_id: i64, from_stage: u32) -> AppResult<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    if from_stage <= 1 {
+        conn.execute(
+            "UPDATE meetings SET clean_transcript = NULL, organized_transcript = NULL,
+             summary = NULL, report = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now, meeting_id],
+        )?;
+        conn.execute("DELETE FROM action_items WHERE meeting_id = ?1", params![meeting_id])?;
+        conn.execute("DELETE FROM meeting_structures WHERE meeting_id = ?1", params![meeting_id])?;
+    } else if from_stage <= 2 {
+        conn.execute(
+            "UPDATE meetings SET organized_transcript = NULL, summary = NULL, report = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now, meeting_id],
+        )?;
+        conn.execute("DELETE FROM action_items WHERE meeting_id = ?1", params![meeting_id])?;
+        conn.execute("DELETE FROM meeting_structures WHERE meeting_id = ?1", params![meeting_id])?;
+    } else if from_stage <= 3 {
+        conn.execute(
+            "UPDATE meetings SET summary = NULL, report = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now, meeting_id],
+        )?;
+        conn.execute("DELETE FROM action_items WHERE meeting_id = ?1", params![meeting_id])?;
+        conn.execute("DELETE FROM meeting_structures WHERE meeting_id = ?1", params![meeting_id])?;
+    } else if from_stage <= 4 {
+        conn.execute(
+            "UPDATE meetings SET summary = NULL, report = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now, meeting_id],
+        )?;
+    } else if from_stage <= 5 {
+        conn.execute(
+            "UPDATE meetings SET report = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now, meeting_id],
+        )?;
+        conn.execute("DELETE FROM action_items WHERE meeting_id = ?1", params![meeting_id])?;
+    } else {
+        // from_stage == 6: only clear report
+        conn.execute(
+            "UPDATE meetings SET report = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now, meeting_id],
+        )?;
+    }
+    Ok(())
+}
