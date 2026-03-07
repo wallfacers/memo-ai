@@ -32,4 +32,6 @@
 
 ## 当前计划
 
-_暂无进行中的计划。_
+| 计划 | 目标 |
+|------|------|
+| [05-funasr-realtime-asr.md](./05-funasr-realtime-asr.md) | FunASR 实时录音转写集成 |

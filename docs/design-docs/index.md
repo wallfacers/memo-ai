@@ -9,6 +9,7 @@
 | [core-beliefs.md](./core-beliefs.md) | 核心设计理念与工程信条 |
 | [ai-pipeline.md](./ai-pipeline.md) | AI 处理管道详细设计 |
 | [acp-integration.md](./acp-integration.md) | ACP 智能体集成设计（多轮对话精炼） |
+| [../plans/2026-03-07-funasr-realtime-asr-design.md](../plans/2026-03-07-funasr-realtime-asr-design.md) | FunASR 实时录音转写集成设计 |
 
 ## 写作规范
 
