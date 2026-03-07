@@ -173,14 +173,6 @@ export function useUpdateMeetingSummary() {
   );
 }
 
-export function useRegenerateSummary() {
-  return useCallback(
-    (meetingId: number) =>
-      invoke<string>("regenerate_summary", { meetingId }),
-    []
-  );
-}
-
 export function useRegenerateSummaryStream() {
   return useCallback(
     (meetingId: number) =>

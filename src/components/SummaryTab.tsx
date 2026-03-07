@@ -77,9 +77,13 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
 
   async function handleCopy() {
     const text = isEditing ? editText : (meeting.summary ?? "");
-    await navigator.clipboard.writeText(text);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(text);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 1500);
+    } catch (e) {
+      console.error("Failed to copy to clipboard:", e);
+    }
   }
 
   async function handleRegenerate() {
@@ -98,6 +102,7 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
         else if (s === 4) setRegenPhase("stage4");
       }
     );
+    unlistenRef.current = [unlistenStage];
 
     const unlistenChunk = await listen<{ text: string }>(
       "summary_chunk",
@@ -106,17 +111,20 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
         setStreamingText((prev) => prev + event.payload.text);
       }
     );
+    unlistenRef.current = [unlistenStage, unlistenChunk];
 
     const unlistenDone = await listen<{ summary: string }>(
       "summary_done",
       (event) => {
-        setRegenPhase("done");
         setStreamingText(event.payload.summary);
+        setEditText(event.payload.summary);
         onSummaryUpdated(event.payload.summary);
         unlistenRef.current.forEach((fn) => fn());
         unlistenRef.current = [];
+        setRegenPhase("idle");
       }
     );
+    unlistenRef.current = [unlistenStage, unlistenChunk, unlistenDone];
 
     const unlistenError = await listen<{ message: string }>(
       "summary_error",
@@ -128,7 +136,6 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
         unlistenRef.current = [];
       }
     );
-
     unlistenRef.current = [unlistenStage, unlistenChunk, unlistenDone, unlistenError];
 
     try {
@@ -145,12 +152,10 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
   const isRegenerating = regenPhase !== "idle";
   const hasSummary = !!(regenPhase === "done" ? streamingText : meeting.summary);
 
-  const stageLabel = () => {
-    if (regenPhase === "stage1") return t("summary.actions.stage1");
-    if (regenPhase === "stage2") return t("summary.actions.stage2");
-    if (regenPhase === "stage4") return t("summary.actions.stage4");
-    return "";
-  };
+  const stageLabel =
+    regenPhase === "stage1" ? t("summary.actions.stage1") :
+    regenPhase === "stage2" ? t("summary.actions.stage2") :
+    regenPhase === "stage4" ? t("summary.actions.stage4") : "";
 
   return (
     <div className="flex flex-col gap-2">
@@ -206,7 +211,7 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
       {(regenPhase === "stage1" || regenPhase === "stage2" || regenPhase === "stage4") ? (
         <div className="flex items-center gap-2 px-4 py-12 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-          <span>{stageLabel()}</span>
+          <span>{stageLabel}</span>
         </div>
       ) : regenPhase === "streaming" ? (
         <div className="px-4 py-2 text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">
