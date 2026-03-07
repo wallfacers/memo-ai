@@ -4,6 +4,7 @@ mod commands;
 mod db;
 mod error;
 mod llm;
+pub mod eval;
 mod process;
 
 use commands::{
