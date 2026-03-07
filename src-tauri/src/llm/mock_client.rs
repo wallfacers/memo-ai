@@ -26,6 +26,11 @@ impl MockLlmClient {
 
 impl LlmClient for MockLlmClient {
     fn complete(&self, _prompt: &str) -> AppResult<String> {
+        if self.responses.is_empty() {
+            return Err(crate::error::AppError::Other(
+                "MockLlmClient has no responses configured".to_string()
+            ));
+        }
         let count = self.call_count.fetch_add(1, Ordering::SeqCst);
         let idx = count % self.responses.len();
         Ok(self.responses[idx].clone())
