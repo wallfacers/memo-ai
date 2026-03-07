@@ -10,6 +10,9 @@ pub trait AsrProvider: Send {
 
 pub fn build_asr(config: &AppConfig) -> Box<dyn AsrProvider> {
     match config.asr_provider.as_str() {
+        "funasr" => Box::new(super::funasr::FunAsrBatchProvider::new(
+            &config.funasr_ws_url,
+        )),
         "aliyun" => Box::new(super::aliyun::AliyunAsr::new(
             &config.aliyun_asr_app_key,
             &config.aliyun_asr_access_key_id,

@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use crate::error::{AppError, AppResult};
 use super::client::LlmClient;
 
+/// 阶段完成回调：(stage编号 1-6, 阶段名称, 结果摘要)
+pub type StageCallback = Box<dyn Fn(u8, &str, &str) + Send>;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StructuredMeeting {
     pub topic: Option<String>,
@@ -32,11 +35,23 @@ pub struct PipelineOutput {
 pub struct Pipeline<'a> {
     client: &'a dyn LlmClient,
     prompts_dir: &'a Path,
+    on_stage_done: Option<StageCallback>,
 }
 
 impl<'a> Pipeline<'a> {
     pub fn new(client: &'a dyn LlmClient, prompts_dir: &'a Path) -> Self {
-        Pipeline { client, prompts_dir }
+        Pipeline { client, prompts_dir, on_stage_done: None }
+    }
+
+    pub fn with_callback(mut self, cb: StageCallback) -> Self {
+        self.on_stage_done = Some(cb);
+        self
+    }
+
+    fn notify_stage(&self, stage: u8, name: &str, summary: &str) {
+        if let Some(ref cb) = self.on_stage_done {
+            cb(stage, name, summary);
+        }
     }
 
     fn load_prompt(&self, filename: &str) -> AppResult<String> {
@@ -145,12 +160,31 @@ impl<'a> Pipeline<'a> {
     /// Run the full pipeline (stages 1-6, plus optional stage 7 if auto_titled).
     pub fn run(&self, raw_transcript: &str, auto_titled: bool) -> AppResult<PipelineOutput> {
         let clean = self.stage1_clean(raw_transcript)?;
+        self.notify_stage(1, "文本清洗", &format!("完成（共 {} 字）", clean.len()));
+
         let organized = self.stage2_speaker(&clean)?;
+        let s2_preview = organized.chars().take(50).collect::<String>();
+        self.notify_stage(2, "说话人整理", &s2_preview);
+
         let structure = self.stage3_structure(&organized);
+        let s3_summary = format!(
+            "主题：{} · 参会 {} 人 · {} 项决策",
+            structure.topic.as_deref().unwrap_or("未知"),
+            structure.participants.len(),
+            structure.decisions.len(),
+        );
+        self.notify_stage(3, "结构化提取", &s3_summary);
+
         let summary = self.stage4_summary(&organized)?;
+        let s4_preview = summary.chars().take(100).collect::<String>();
+        self.notify_stage(4, "会议总结", &s4_preview);
+
         let action_items = self.stage5_actions(&organized);
+        self.notify_stage(5, "行动项提取", &format!("共 {} 项行动", action_items.len()));
+
         let actions_json = serde_json::to_string(&action_items)?;
         let report = self.stage6_report(&summary, &actions_json)?;
+        self.notify_stage(6, "报告生成", "报告已生成，点击查看");
 
         let generated_title = if auto_titled {
             match self.stage7_title(&summary) {

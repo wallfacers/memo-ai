@@ -4,13 +4,15 @@ mod commands;
 mod db;
 mod error;
 mod llm;
+mod process;
 
 use commands::{
-    ConfigState, DbState, RecordState,
+    ConfigState, DbState, RecordState, FunAsrState,
     check_whisper_cli, create_meeting, delete_meeting, export_report, get_action_items, get_meeting,
     get_settings, get_transcripts, list_meetings, rename_meeting, run_pipeline, save_settings,
     search_meetings, start_recording, stop_recording, test_asr_connection, test_llm_connection,
     transcribe_audio, update_action_item_status,
+    start_funasr_session, stop_funasr_session, check_funasr_server,
 };
 use std::sync::Mutex;
 use tauri::Manager;
@@ -33,6 +35,7 @@ pub fn run() {
 
             app.manage(DbState(Mutex::new(conn)));
             app.manage(RecordState(Mutex::new(None)));
+            app.manage(FunAsrState(Mutex::new(None)));
 
             let settings_path = commands::settings_path(&app.handle())
                 .unwrap_or_else(|_| data_dir.join("settings.json"));
@@ -82,6 +85,9 @@ pub fn run() {
             test_llm_connection,
             check_whisper_cli,
             test_asr_connection,
+            start_funasr_session,
+            stop_funasr_session,
+            check_funasr_server,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
