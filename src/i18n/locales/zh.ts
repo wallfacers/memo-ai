@@ -22,6 +22,14 @@ const zh = {
     creating: "正在创建…",
     autoCreate: "将自动创建新会议并开始录制",
   },
+  summary: {
+    actions: {
+      edit: "编辑总结",
+      finishEdit: "完成编辑",
+      copy: "复制总结",
+      regenerate: "重新生成总结",
+    },
+  },
   meeting: {
     meetingPrefix: "会议",
     loading: "加载中…",

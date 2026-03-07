@@ -22,6 +22,14 @@ const en = {
     creating: "Creating…",
     autoCreate: "A new meeting will be created and recording will start automatically",
   },
+  summary: {
+    actions: {
+      edit: "Edit summary",
+      finishEdit: "Done editing",
+      copy: "Copy summary",
+      regenerate: "Regenerate summary",
+    },
+  },
   meeting: {
     meetingPrefix: "Meeting",
     loading: "Loading…",
