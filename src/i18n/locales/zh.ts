@@ -28,6 +28,9 @@ const zh = {
       finishEdit: "完成编辑",
       copy: "复制总结",
       regenerate: "重新生成总结",
+      stage1: "正在清洗文本...",
+      stage2: "正在整理说话人...",
+      stage4: "正在生成摘要...",
     },
   },
   meeting: {

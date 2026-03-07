@@ -28,6 +28,9 @@ const en = {
       finishEdit: "Done editing",
       copy: "Copy summary",
       regenerate: "Regenerate summary",
+      stage1: "Cleaning transcript...",
+      stage2: "Organizing speakers...",
+      stage4: "Generating summary...",
     },
   },
   meeting: {

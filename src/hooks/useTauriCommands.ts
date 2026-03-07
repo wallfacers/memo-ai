@@ -180,3 +180,11 @@ export function useRegenerateSummary() {
     []
   );
 }
+
+export function useRegenerateSummaryStream() {
+  return useCallback(
+    (meetingId: number) =>
+      invoke<void>("regenerate_summary_stream", { meetingId }),
+    []
+  );
+}
