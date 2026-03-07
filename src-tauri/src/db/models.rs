@@ -149,6 +149,15 @@ pub fn update_meeting_summary_report(
     Ok(())
 }
 
+pub fn update_meeting_summary(conn: &Connection, id: i64, summary: &str) -> AppResult<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE meetings SET summary = ?1, updated_at = ?2 WHERE id = ?3",
+        params![summary, now, id],
+    )?;
+    Ok(())
+}
+
 pub fn delete_meeting(conn: &Connection, id: i64) -> AppResult<()> {
     conn.execute("DELETE FROM meetings WHERE id = ?1", params![id])?;
     Ok(())
