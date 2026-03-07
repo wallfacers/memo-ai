@@ -37,3 +37,5 @@ src-tauri/WixTools/
 
 # Git worktrees
 .worktrees/
+
+eval-config.json

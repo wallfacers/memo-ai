@@ -1,0 +1,6 @@
+{
+  "provider": "ollama",
+  "base_url": "http://localhost:11434",
+  "model": "llama3",
+  "api_key": null
+}
