@@ -193,6 +193,93 @@ pub fn rename_meeting(
     models::update_meeting_title(&conn, id, &title).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn update_meeting_summary(
+    id: i64,
+    summary: String,
+    db: State<'_, DbState>,
+) -> Result<(), String> {
+    let conn = (*db).0.lock().unwrap();
+    models::update_meeting_summary(&conn, id, &summary).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn regenerate_summary(
+    meeting_id: i64,
+    db: State<'_, DbState>,
+    config: State<'_, ConfigState>,
+) -> Result<String, String> {
+    let cfg = (*config).0.lock().unwrap().clone();
+    let llm_config = LlmConfig {
+        provider: cfg.llm_provider.provider_type,
+        base_url: cfg.llm_provider.base_url,
+        model: cfg.llm_provider.model,
+        api_key: cfg.llm_provider.api_key,
+    };
+
+    // 复用与 run_pipeline 相同的 prompts_dir 解析逻辑
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let prompts_dir = {
+        let exe_adjacent = exe_dir.join("prompts");
+        let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("prompts");
+        if exe_adjacent.exists() {
+            exe_adjacent
+        } else if dev_path.exists() {
+            dev_path
+        } else {
+            PathBuf::from("prompts")
+        }
+    };
+
+    // 读取转写文本（锁立即释放）
+    let transcript_text = {
+        let conn = (*db).0.lock().unwrap();
+        let segments = models::get_transcripts(&conn, meeting_id).map_err(|e| e.to_string())?;
+        segments
+            .iter()
+            .map(|s| {
+                if let Some(ref speaker) = s.speaker {
+                    format!("{}：{}", speaker, s.text)
+                } else {
+                    s.text.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    if transcript_text.is_empty() {
+        return Err("No transcript available to regenerate summary".into());
+    }
+
+    // 在独立 OS 线程中运行 LLM（避免 reqwest::blocking 与 Tokio 冲突）
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || {
+        let client = llm_config.build_client();
+        let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
+        let result = pipeline.stage1_clean(&transcript_text)
+            .and_then(|clean| pipeline.stage2_speaker(&clean))
+            .and_then(|organized| pipeline.stage4_summary(&organized));
+        let _ = tx.send(result);
+    });
+
+    let new_summary = rx.await
+        .map_err(|_| "LLM thread panicked".to_string())?
+        .map_err(|e| e.to_string())?;
+
+    // 写库
+    {
+        let conn = (*db).0.lock().unwrap();
+        models::update_meeting_summary(&conn, meeting_id, &new_summary)
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(new_summary)
+}
+
 // ─── Transcript Commands ──────────────────────────────────────────────────────
 
 #[tauri::command]
