@@ -1,0 +1,27 @@
+[meta]
+id = "weekly_standup_01"
+scene = "周会"
+difficulty = "normal"
+
+[input]
+raw_transcript = """
+主持人：好，开始今天的周会，每个人说一下本周进展和下周计划。小明先来。
+小明：本周完成了登录模块的单元测试，覆盖率从 60% 提升到 85%。下周继续做支付模块的测试。
+主持人：好，小红。
+小红：本周修了三个线上 Bug，其中一个是 iOS 崩溃问题，影响范围比较大，已经发了热更新。下周做性能优化专项。
+主持人：好，有什么需要同步的吗？
+小红：iOS 那个崩溃问题根因是第三方 SDK 版本兼容问题，建议后续升级 SDK 时都先跑一遍回归测试。
+主持人：好，记一个行动项，小明负责建立 SDK 升级回归测试流程，两周内完成。
+小明：没问题。
+"""
+
+[expected]
+summary_must_contain = ["登录", "iOS", "崩溃", "SDK"]
+min_action_items = 1
+required_participants = ["小明", "小红"]
+golden_summary = "小明完成登录模块测试覆盖率提升（60%→85%），下周做支付模块测试。小红修复3个Bug，含iOS崩溃热更新。行动项：小明建立SDK升级回归测试流程（两周内）。"
+
+[[expected.golden_actions]]
+task = "建立 SDK 升级回归测试流程"
+owner = "小明"
+deadline = "两周内"

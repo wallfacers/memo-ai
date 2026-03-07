@@ -1,0 +1,30 @@
+[meta]
+id = "requirements_01"
+scene = "需求讨论"
+difficulty = "normal"
+
+[input]
+raw_transcript = """
+产品：这次我们要讨论用户反馈模块的需求，主要有两个方向，一个是在 App 内嵌入反馈表单，另一个是跳转到外部链接。
+前端：内嵌表单对用户体验更好，但开发量大一些，大概需要两周。
+后端：如果内嵌表单的话，我这边还要开一个接口存储反馈数据，大概三天的工作量。
+产品：那我们先做内嵌表单，优先级 P1。前端这周开始排期，后端接口下周一前提供。
+前端：收到，这周五给出详细排期。
+产品：好的，这个需求就确定了。
+"""
+
+[expected]
+summary_must_contain = ["反馈", "内嵌", "P1"]
+min_action_items = 2
+required_participants = ["产品", "前端", "后端"]
+golden_summary = "确定用户反馈模块采用 App 内嵌表单方案，优先级 P1。前端本周开始排期（周五提供详细排期），后端接口下周一前提供。"
+
+[[expected.golden_actions]]
+task = "提供内嵌反馈表单详细排期"
+owner = "前端"
+deadline = "本周五"
+
+[[expected.golden_actions]]
+task = "开发反馈数据存储接口"
+owner = "后端"
+deadline = "下周一"

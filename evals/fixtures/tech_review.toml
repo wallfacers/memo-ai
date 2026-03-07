@@ -1,0 +1,32 @@
+[meta]
+id = "tech_review_01"
+scene = "技术评审"
+difficulty = "normal"
+
+[input]
+raw_transcript = """
+张三：好，今天我们评审一下新的缓存方案，大家都看过方案文档了吗？
+李四：看了，我觉得 Redis 集群方案总体可行，但需要重点考虑数据一致性问题，尤其是在节点故障时。
+王五：我这边关注的是性能，我们现在的 QPS 大概是两万，Redis 应该没问题。
+张三：好，那我们就决定采用 Redis 集群方案。李四，你负责把方案细化，下周五之前提交详细设计文档。
+李四：没问题。
+张三：王五，你这边做一下压测，周三出结果，我们好做最终决策。
+王五：好的，我来安排。
+张三：那今天就到这里，下周继续跟进。
+"""
+
+[expected]
+summary_must_contain = ["Redis", "李四", "王五"]
+min_action_items = 2
+required_participants = ["张三", "李四", "王五"]
+golden_summary = "会议决定采用 Redis 集群方案。李四负责方案细化，下周五前提交详细设计文档；王五负责压测，周三出结果，用于最终决策。"
+
+[[expected.golden_actions]]
+task = "Redis 方案细化，提交详细设计文档"
+owner = "李四"
+deadline = "下周五"
+
+[[expected.golden_actions]]
+task = "压测"
+owner = "王五"
+deadline = "周三"

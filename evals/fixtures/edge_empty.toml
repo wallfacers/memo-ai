@@ -1,0 +1,13 @@
+[meta]
+id = "edge_empty_01"
+scene = "边界：极短转写"
+difficulty = "edge"
+
+[input]
+raw_transcript = "嗯。好的。散会。"
+
+[expected]
+summary_must_contain = []
+min_action_items = 0
+required_participants = []
+golden_summary = ""
