@@ -115,6 +115,19 @@ impl<'a> Pipeline<'a> {
         self.client.complete(&prompt)
     }
 
+    /// Stage 4 (streaming): Generate meeting summary, calling on_token for each token.
+    /// Returns the full summary when done.
+    pub fn stage4_summary_streaming(
+        &self,
+        meeting_text: &str,
+        on_token: Box<dyn Fn(&str) + Send>,
+    ) -> AppResult<String> {
+        let template = self.load_prompt("04_summary.txt")?;
+        let prompt = Self::fill_template(&template, "meeting_text", meeting_text);
+        log::info!("Running pipeline stage 4 (streaming): summary");
+        self.client.complete_streaming(&prompt, on_token)
+    }
+
     /// Stage 5: Extract action items (JSON array). Falls back to empty vec on parse failure.
     pub fn stage5_actions(&self, meeting_text: &str) -> Vec<ActionItemRaw> {
         let result = (|| -> AppResult<Vec<ActionItemRaw>> {
