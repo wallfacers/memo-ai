@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { save } from "@tauri-apps/plugin-dialog";
 import { exportReport } from "@/hooks/useTauriCommands";
@@ -50,6 +50,7 @@ export function Meeting() {
   const {
     currentMeeting,
     setCurrentMeeting,
+    updateCurrentMeeting,
     transcripts,
     setTranscripts,
     actionItems,
@@ -62,6 +63,8 @@ export function Meeting() {
     clearPipelineStages,
     setPipelineFailedStage,
   } = useMeetingStore();
+
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
 
   const { settings } = useSettingsStore();
   const { isRecording, error, startRecording, stopRecording } = useRecording(meetingId);
@@ -78,7 +81,7 @@ export function Meeting() {
 
   async function loadMeeting() {
     const meeting = await getMeeting(meetingId!);
-    setCurrentMeeting(meeting);
+    updateCurrentMeeting(meeting);
   }
 
   async function loadTranscripts() {
@@ -97,6 +100,9 @@ export function Meeting() {
     async function fetchMeeting() {
       const meeting = await getMeeting(meetingId!);
       setCurrentMeeting(meeting);
+      if (meeting.status === "error" && useMeetingStore.getState().recordingPhase === "idle") {
+        setRecordingPhase("error");
+      }
     }
     async function fetchTranscripts() {
       const data = await getTranscripts(meetingId!);
@@ -125,6 +131,7 @@ export function Meeting() {
     clearRealtimeSegments();
     clearPipelineStages();
     setPipelineFailedStage(null);
+    setPipelineError(null);
     try {
       if (settings.funasr_enabled) {
         await startFunAsrSession(meetingId!);
@@ -144,15 +151,14 @@ export function Meeting() {
         await stopFunAsrSession();
       }
 
-      const audioPath = await stopRecording();
-      if (!audioPath || !meetingId) {
+      const stopResult = await stopRecording();
+      if (!stopResult?.audio_path || !meetingId) {
         setRecordingPhase("error");
         return;
       }
 
-      setCurrentMeetingStatus("processing");
       setRecordingPhase("batch_transcribing");
-      await transcribeAudio(audioPath, meetingId);
+      await transcribeAudio(stopResult.audio_path, meetingId, stopResult.recording_started_at);
       await loadTranscripts();
 
       setRecordingPhase("merging");
@@ -169,6 +175,7 @@ export function Meeting() {
       setCurrentMeetingStatus("completed");
     } catch (e) {
       console.error("Processing failed:", e);
+      setPipelineError(e instanceof Error ? e.message : String(e));
       setRecordingPhase("error");
       setCurrentMeetingStatus("error");
     }
@@ -183,6 +190,7 @@ export function Meeting() {
     if (!meetingId) return;
     setPipelineFailedStage(null);
     clearPipelineStages();
+    setPipelineError(null);
     setRecordingPhase("pipeline");
     setCurrentMeetingStatus("processing");
     try {
@@ -195,6 +203,7 @@ export function Meeting() {
       setCurrentMeetingStatus("completed");
     } catch (e) {
       console.error("Pipeline retry failed:", e);
+      setPipelineError(e instanceof Error ? e.message : String(e));
       setRecordingPhase("error");
       setCurrentMeetingStatus("error");
     }
@@ -221,36 +230,46 @@ export function Meeting() {
         <h2 className="text-lg font-semibold text-foreground truncate pr-4">
           {currentMeeting.title}
         </h2>
-        <Badge variant={statusVariant[currentMeeting.status]} className="shrink-0">
+        <Badge
+          variant={statusVariant[currentMeeting.status]}
+          className={`shrink-0${currentMeeting.status === "processing" ? " border-amber-500 text-amber-500" : currentMeeting.status === "completed" ? " border-green-600 text-green-600 bg-green-50 dark:bg-green-950" : ""}`}
+        >
           {t(`meeting.status.${currentMeeting.status}`)}
         </Badge>
       </div>
 
       {/* Record area */}
       <div className="flex flex-col items-center gap-3 py-6 border-b border-border shrink-0">
-        {/* 录音阶段状态栏 */}
+        <RecordButton
+          isRecording={isRecording}
+          disabled={
+            currentMeeting.status === "processing" ||
+            recordingPhase === "connecting" ||
+            recordingPhase === "stopping" ||
+            recordingPhase === "batch_transcribing" ||
+            recordingPhase === "merging" ||
+            recordingPhase === "pipeline"
+          }
+          onStart={handleStartRecording}
+          onStop={handleStopRecording}
+        />
+
+        {/* 录音阶段状态栏（按钮下方统一展示） */}
         {recordingPhase !== "idle" && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {recordingPhase === "connecting" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.connecting")}</span></>}
             {recordingPhase === "recording" && <><span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" /><span>{t("meeting.phase.recording")}</span></>}
             {recordingPhase === "stopping" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.stopping")}</span></>}
-            {recordingPhase === "batch_transcribing" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.batchTranscribing")}</span></>}
-            {recordingPhase === "merging" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.merging")}</span></>}
-            {recordingPhase === "pipeline" && <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>{t("meeting.phase.pipeline")}</span></>}
+            {recordingPhase === "batch_transcribing" && <><Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" /><span className="text-amber-500">{t("meeting.phase.batchTranscribing")}</span></>}
+            {recordingPhase === "merging" && <><Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" /><span className="text-amber-500">{t("meeting.phase.merging")}</span></>}
+            {recordingPhase === "pipeline" && <><Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" /><span className="text-amber-500">{t("meeting.phase.pipeline")}</span></>}
             {recordingPhase === "done" && <><CheckCircle2 className="h-3.5 w-3.5 text-green-600" /><span>{t("meeting.phase.done")}</span></>}
-            {recordingPhase === "error" && <><XCircle className="h-3.5 w-3.5 text-destructive" /><span>{t("meeting.phase.error")}</span></>}
+            {recordingPhase === "error" && <><XCircle className="h-3.5 w-3.5 text-destructive" /><span className="text-destructive">{t("meeting.phase.error")}</span></>}
           </div>
         )}
 
-        <RecordButton
-          isRecording={isRecording}
-          disabled={currentMeeting.status === "processing"}
-          onStart={handleStartRecording}
-          onStop={handleStopRecording}
-        />
-
-        {currentMeeting.status === "processing" && (
-          <p className="text-sm text-amber-500 font-medium">{t("meeting.processingNotice")}</p>
+        {recordingPhase === "error" && pipelineError && (
+          <p className="text-sm text-destructive">{pipelineError}</p>
         )}
         {error && (
           <p className="text-sm text-destructive">{error}</p>
@@ -273,17 +292,13 @@ export function Meeting() {
       <Tabs defaultValue="transcript" className="flex-1 flex flex-col overflow-hidden min-h-0 px-6 pt-4">
         <TabsList className="shrink-0">
           <TabsTrigger value="transcript">{t("meeting.tabs.transcript")}</TabsTrigger>
-          <TabsTrigger value="actions">{t("meeting.tabs.actions")}</TabsTrigger>
           <TabsTrigger value="summary">{t("meeting.tabs.summary")}</TabsTrigger>
+          <TabsTrigger value="actions">{t("meeting.tabs.actions")}</TabsTrigger>
           <TabsTrigger value="report">{t("meeting.tabs.report")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="transcript" className="flex-1 overflow-auto min-h-0 mt-4">
-          <TranscriptView transcripts={transcripts} />
-        </TabsContent>
-
-        <TabsContent value="actions" className="flex-1 overflow-auto mt-4">
-          <ActionItemList items={actionItems} onToggle={handleToggleActionItem} />
+          <TranscriptView transcripts={transcripts} meetingStartTime={currentMeeting?.start_time} />
         </TabsContent>
 
         <TabsContent value="summary" className="flex-1 overflow-auto mt-4">
@@ -291,6 +306,10 @@ export function Meeting() {
             meeting={currentMeeting}
             onSummaryUpdated={handleSummaryUpdated}
           />
+        </TabsContent>
+
+        <TabsContent value="actions" className="flex-1 overflow-auto mt-4">
+          <ActionItemList items={actionItems} onToggle={handleToggleActionItem} />
         </TabsContent>
 
         <TabsContent value="report" className="flex-1 overflow-auto mt-4">
