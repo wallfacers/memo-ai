@@ -303,7 +303,8 @@ export function Settings() {
               <SelectContent>
                 <SelectItem value="local_whisper">{t("settings.asr.localWhisper")}</SelectItem>
                 <SelectItem value="aliyun">{t("settings.asr.aliyunProvider")}</SelectItem>
-                <SelectItem value="funasr">{t("settings.asr.funasrProvider")}</SelectItem>
+                {/* FunASR 暂时禁用：效果不如 Whisper */}
+                {/* <SelectItem value="funasr">{t("settings.asr.funasrProvider")}</SelectItem> */}
               </SelectContent>
             </Select>
           </div>
@@ -331,21 +332,14 @@ export function Settings() {
             <>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">{t("settings.asr.whisperModel")}</label>
-                <Select
+                <Input
                   value={local.whisper_model}
-                  onValueChange={(v) => setLocal({ ...local, whisper_model: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tiny">{t("settings.asr.modelTiny")}</SelectItem>
-                    <SelectItem value="base">{t("settings.asr.modelBase")}</SelectItem>
-                    <SelectItem value="small">{t("settings.asr.modelSmall")}</SelectItem>
-                    <SelectItem value="medium">{t("settings.asr.modelMedium")}</SelectItem>
-                    <SelectItem value="large">{t("settings.asr.modelLarge")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                  onChange={(e) => setLocal({ ...local, whisper_model: e.target.value })}
+                  placeholder={t("settings.asr.whisperModelPlaceholder")}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {t("settings.asr.whisperModelHint")}：ggml-{local.whisper_model || t("settings.asr.whisperModelPlaceholder")}.bin
+                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -509,8 +503,8 @@ export function Settings() {
             </>
           )}
 
-          {/* FunASR 面板 */}
-          {local.asr_provider === "funasr" && (
+          {/* FunASR 面板（暂时禁用：效果不如 Whisper） */}
+          {false && local.asr_provider === "funasr" && (
             <>
               {/* 启用实时字幕开关 */}
               <div className="flex items-center justify-between">

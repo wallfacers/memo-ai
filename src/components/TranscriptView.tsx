@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { Transcript } from "@/types";
-import { formatTimestamp } from "@/utils/format";
+import { formatTimestamp, formatAbsoluteTimestamp } from "@/utils/format";
 
 interface TranscriptViewProps {
   transcripts: Transcript[];
+  meetingStartTime?: string;
 }
 
-export function TranscriptView({ transcripts }: TranscriptViewProps) {
+export function TranscriptView({ transcripts, meetingStartTime }: TranscriptViewProps) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -27,8 +28,10 @@ export function TranscriptView({ transcripts }: TranscriptViewProps) {
     <div className="flex flex-col gap-3 pb-4">
       {transcripts.map((tr) => (
         <div key={tr.id} className="flex gap-3">
-          <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-muted-foreground w-10">
-            {formatTimestamp(tr.timestamp)}
+          <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-muted-foreground w-14">
+            {meetingStartTime
+              ? formatAbsoluteTimestamp(tr.timestamp, meetingStartTime)
+              : formatTimestamp(tr.timestamp)}
           </span>
           <div className="text-sm leading-relaxed">
             {tr.speaker && (

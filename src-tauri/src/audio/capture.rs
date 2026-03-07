@@ -1,8 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use crate::error::{AppError, AppResult};
-use super::encoder::write_wav;
 
 pub struct AudioCapture {
     samples: Arc<Mutex<Vec<i16>>>,
@@ -99,17 +97,13 @@ impl AudioCapture {
         Ok(())
     }
 
-    /// Stop recording and save WAV to disk. Returns the output path.
-    pub fn stop_and_save(&mut self, output_dir: &Path, filename: &str) -> AppResult<PathBuf> {
-        // Drop the stream to stop recording
+    /// Stop the stream and move out the sample buffer (zero-copy).
+    /// Used by async stop_recording to offload WAV writing to a blocking thread.
+    pub fn take_samples_and_stop(&mut self) -> (Vec<i16>, u32, u16) {
+        // Drop the stream first to stop the audio callback immediately
         self.stream.take();
-
-        let samples = self.samples.lock().unwrap().clone();
-        let path = output_dir.join(filename);
-        write_wav(&path, &samples, self.sample_rate, self.channels)?;
-
-        // Clear buffer
-        self.samples.lock().unwrap().clear();
-        Ok(path)
+        // Move samples out without cloning; leaves an empty Vec in place
+        let samples = std::mem::take(&mut *self.samples.lock().unwrap());
+        (samples, self.sample_rate, self.channels)
     }
 }

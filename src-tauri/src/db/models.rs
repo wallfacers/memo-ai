@@ -312,6 +312,7 @@ pub fn delete_action_items_for_meeting(conn: &Connection, meeting_id: i64) -> Ap
     Ok(())
 }
 
+
 /// Clear pipeline results from a given stage onward.
 /// from_stage: 1=clean, 2=organized, 3=structure, 4=summary, 5=actions, 6=report
 pub fn clear_pipeline_from_stage(conn: &Connection, meeting_id: i64, from_stage: u32) -> AppResult<()> {

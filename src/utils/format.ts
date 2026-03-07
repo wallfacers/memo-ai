@@ -27,6 +27,11 @@ export function formatTimestamp(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+export function formatAbsoluteTimestamp(seconds: number, meetingStartTime: string): string {
+  const ms = Math.floor(seconds * 1000);
+  return dayjs(meetingStartTime).add(ms, "millisecond").format("HH:mm:ss");
+}
+
 export function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + "...";

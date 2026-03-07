@@ -37,7 +37,7 @@ pub fn run() {
                 .expect("Failed to initialize database");
 
             app.manage(DbState(Mutex::new(conn)));
-            app.manage(RecordState(Mutex::new(None)));
+            app.manage(RecordState(Mutex::new((None, None))));
             app.manage(FunAsrState(Mutex::new(None)));
 
             let settings_path = commands::settings_path(&app.handle())

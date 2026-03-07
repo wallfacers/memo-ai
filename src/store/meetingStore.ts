@@ -14,6 +14,7 @@ interface MeetingStore {
 
   setMeetings: (meetings: Meeting[]) => void;
   setCurrentMeeting: (meeting: Meeting | null) => void;
+  updateCurrentMeeting: (meeting: Meeting) => void;
   setCurrentMeetingStatus: (status: MeetingStatus) => void;
   updateMeetingTitle: (id: number, title: string) => void;
   setTranscripts: (transcripts: Transcript[]) => void;
@@ -23,6 +24,7 @@ interface MeetingStore {
   setError: (error: string | null) => void;
   setRecordingPhase: (phase: RecordingPhase) => void;
   appendRealtimeSegment: (segment: StreamingSegment) => void;
+  appendRealtimeSegments: (segments: StreamingSegment[]) => void;
   clearRealtimeSegments: () => void;
   appendPipelineStage: (stage: PipelineStageDoneEvent) => void;
   clearPipelineStages: () => void;
@@ -44,6 +46,7 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
 
   setMeetings: (meetings) => set({ meetings }),
   setCurrentMeeting: (meeting) => set({ currentMeeting: meeting, transcripts: [], actionItems: [] }),
+  updateCurrentMeeting: (meeting) => set({ currentMeeting: meeting }),
   setCurrentMeetingStatus: (status) =>
     set((state) => ({
       currentMeeting: state.currentMeeting ? { ...state.currentMeeting, status } : null,
@@ -68,6 +71,8 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
   setRecordingPhase: (phase) => set({ recordingPhase: phase }),
   appendRealtimeSegment: (segment) =>
     set((state) => ({ realtimeSegments: [...state.realtimeSegments, segment] })),
+  appendRealtimeSegments: (segments) =>
+    set((state) => ({ realtimeSegments: [...state.realtimeSegments, ...segments] })),
   clearRealtimeSegments: () => set({ realtimeSegments: [] }),
   appendPipelineStage: (stage) =>
     set((state) => ({ pipelineStages: [...state.pipelineStages, stage] })),

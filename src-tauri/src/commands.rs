@@ -11,7 +11,7 @@ use crate::asr::build_asr;
 use crate::asr::{StreamingAsrSession, StreamingSegment};
 
 pub struct DbState(pub Mutex<rusqlite::Connection>);
-pub struct RecordState(pub Mutex<Option<AudioCapture>>);
+pub struct RecordState(pub Mutex<(Option<AudioCapture>, Option<String>)>);
 pub struct ConfigState(pub Mutex<AppConfig>);
 
 pub struct FunAsrState(pub Mutex<Option<FunAsrSessionHolder>>);
@@ -138,27 +138,42 @@ pub fn start_recording(
     recorder: State<'_, RecordState>,
 ) -> Result<(), String> {
     let mut rec_guard = (*recorder).0.lock().unwrap();
-    if rec_guard.is_some() {
+    if rec_guard.0.is_some() {
         return Err("Recording already in progress".into());
     }
     let mut capture = AudioCapture::new().map_err(|e| e.to_string())?;
     capture.start().map_err(|e| e.to_string())?;
-    *rec_guard = Some(capture);
+    let started_at = chrono::Utc::now().to_rfc3339();
+    *rec_guard = (Some(capture), Some(started_at));
 
     let conn = (*db).0.lock().unwrap();
     models::update_meeting_status(&conn, meeting_id, "recording").map_err(|e| e.to_string())?;
     Ok(())
 }
 
+#[derive(Serialize)]
+pub struct StopRecordingResult {
+    pub audio_path: String,
+    pub recording_started_at: String,
+}
+
 #[tauri::command]
-pub fn stop_recording(
+pub async fn stop_recording(
     meeting_id: i64,
     app_handle: tauri::AppHandle,
     db: State<'_, DbState>,
     recorder: State<'_, RecordState>,
-) -> Result<String, String> {
-    let mut rec_guard = (*recorder).0.lock().unwrap();
-    let capture = rec_guard.as_mut().ok_or("No recording in progress")?;
+) -> Result<StopRecordingResult, String> {
+    // Step 1: Stop the audio stream and take the sample buffer — do this
+    // synchronously before spawning to keep stream drop on the current thread.
+    let (samples, sample_rate, channels, recording_started_at) = {
+        let mut rec_guard = recorder.0.lock().unwrap();
+        let capture = rec_guard.0.as_mut().ok_or("No recording in progress")?;
+        let data = capture.take_samples_and_stop();
+        let started_at = rec_guard.1.clone().unwrap_or_default();
+        *rec_guard = (None, None);
+        (data.0, data.1, data.2, started_at)
+    };
 
     let data_dir = app_handle
         .path()
@@ -167,22 +182,34 @@ pub fn stop_recording(
         .join("recordings");
     std::fs::create_dir_all(&data_dir).map_err(|e: std::io::Error| e.to_string())?;
 
-    let filename = format!("meeting_{}.wav", meeting_id);
-    let audio_path = capture
-        .stop_and_save(&data_dir, &filename)
-        .map_err(|e| e.to_string())?;
-    *rec_guard = None;
+    let wav_path = data_dir.join(format!("meeting_{}.wav", meeting_id));
+    let wav_path_clone = wav_path.clone();
 
-    let audio_path_str = audio_path.to_string_lossy().to_string();
+    // Step 2: Write WAV file on a blocking thread — keeps the UI thread responsive.
+    tokio::task::spawn_blocking(move || {
+        crate::audio::encoder::write_wav(&wav_path_clone, &samples, sample_rate, channels)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    // Step 3: Persist audio path and update meeting status.
+    let audio_path_str = wav_path.to_string_lossy().to_string();
     let end_time = chrono::Utc::now().to_rfc3339();
-    let conn = (*db).0.lock().unwrap();
-    models::update_meeting_audio_path(&conn, meeting_id, &audio_path_str)
-        .map_err(|e| e.to_string())?;
-    models::update_meeting_end_time(&conn, meeting_id, &end_time)
-        .map_err(|e| e.to_string())?;
-    models::update_meeting_status(&conn, meeting_id, "idle").map_err(|e| e.to_string())?;
+    {
+        let conn = db.0.lock().unwrap();
+        models::update_meeting_audio_path(&conn, meeting_id, &audio_path_str)
+            .map_err(|e| e.to_string())?;
+        models::update_meeting_end_time(&conn, meeting_id, &end_time)
+            .map_err(|e| e.to_string())?;
+        models::update_meeting_status(&conn, meeting_id, "idle")
+            .map_err(|e| e.to_string())?;
+    }
 
-    Ok(audio_path_str)
+    Ok(StopRecordingResult {
+        audio_path: audio_path_str,
+        recording_started_at,
+    })
 }
 
 #[tauri::command]
@@ -433,6 +460,7 @@ pub fn get_transcripts(
 pub async fn transcribe_audio(
     audio_path: String,
     meeting_id: i64,
+    recording_started_at: String,
     db: State<'_, DbState>,
     config: State<'_, ConfigState>,
 ) -> Result<String, String> {
@@ -449,6 +477,28 @@ pub async fn transcribe_audio(
         .map_err(|_| "ASR thread panicked".to_string())?
         .map_err(|e| e.to_string())?;
 
+    // 计算本次录音开始时间相对于会议 start_time 的偏移（秒）
+    // 这样多次录制时，每次的 ASR 时间戳都正确叠加在会议时间轴上
+    let time_offset_secs: f64 = {
+        let conn = (*db).0.lock().unwrap();
+        let meeting_start: String = conn.query_row(
+            "SELECT start_time FROM meetings WHERE id = ?1",
+            rusqlite::params![meeting_id],
+            |row| row.get(0),
+        ).unwrap_or_default();
+        if meeting_start.is_empty() || recording_started_at.is_empty() {
+            0.0
+        } else {
+            let t_meeting = chrono::DateTime::parse_from_rfc3339(&meeting_start)
+                .map(|t| t.timestamp_millis())
+                .unwrap_or(0);
+            let t_record = chrono::DateTime::parse_from_rfc3339(&recording_started_at)
+                .map(|t| t.timestamp_millis())
+                .unwrap_or(0);
+            ((t_record - t_meeting) as f64) / 1000.0
+        }
+    };
+
     let conn = (*db).0.lock().unwrap();
     let mut full_text = String::new();
     for seg in &segments {
@@ -457,7 +507,7 @@ pub async fn transcribe_audio(
             meeting_id,
             seg.speaker.as_deref(),
             &seg.text,
-            seg.start,
+            time_offset_secs + seg.start,
             seg.confidence,
         )
         .map_err(|e| e.to_string())?;
@@ -586,7 +636,7 @@ pub async fn run_pipeline(
             ($stage_num:expr, $name:expr, $result:expr, $summary_fn:expr) => {
                 match $result {
                     Ok(val) => {
-                        app_for_cb.emit("pipeline_stage_done", PipelineStageDoneEvent {
+                        app_for_cb.emit("pipeline-stage-done", PipelineStageDoneEvent {
                             stage: $stage_num,
                             name: $name.to_string(),
                             summary: $summary_fn(&val),
@@ -594,7 +644,7 @@ pub async fn run_pipeline(
                         val
                     }
                     Err(e) => {
-                        app_for_cb.emit("pipeline_stage_failed", PipelineStageFailed {
+                        app_for_cb.emit("pipeline-stage-failed", PipelineStageFailed {
                             stage: $stage_num,
                             error: e.to_string(),
                         }).ok();
@@ -635,7 +685,7 @@ pub async fn run_pipeline(
             structure.participants.len(),
             structure.decisions.len(),
         );
-        app_for_cb.emit("pipeline_stage_done", PipelineStageDoneEvent {
+        app_for_cb.emit("pipeline-stage-done", PipelineStageDoneEvent {
             stage: 3,
             name: "结构化提取".to_string(),
             summary: s3_summary,
@@ -665,7 +715,7 @@ pub async fn run_pipeline(
 
         // Stage 5 (infallible)
         let action_items = pipeline.stage5_actions(&organized);
-        app_for_cb.emit("pipeline_stage_done", PipelineStageDoneEvent {
+        app_for_cb.emit("pipeline-stage-done", PipelineStageDoneEvent {
             stage: 5,
             name: "行动项提取".to_string(),
             summary: format!("共 {} 项行动", action_items.len()),
@@ -686,7 +736,7 @@ pub async fn run_pipeline(
         let actions_json = match serde_json::to_string(&action_items) {
             Ok(j) => j,
             Err(e) => {
-                app_for_cb.emit("pipeline_stage_failed", PipelineStageFailed {
+                app_for_cb.emit("pipeline-stage-failed", PipelineStageFailed {
                     stage: 6,
                     error: e.to_string(),
                 }).ok();
@@ -1111,7 +1161,7 @@ pub fn start_funasr_session(
     let (pcm_tx, pcm_rx) = std::sync::mpsc::sync_channel::<Vec<i16>>(64);
     {
         let mut rec_guard = (*recorder).0.lock().unwrap();
-        if let Some(ref mut capture) = *rec_guard {
+        if let Some(ref mut capture) = rec_guard.0 {
             capture.set_chunk_sender(pcm_tx);
         }
     }
@@ -1254,7 +1304,7 @@ pub async fn retry_pipeline_from_stage(
 
         macro_rules! emit_failed {
             ($stage:expr, $err:expr) => {{
-                app_for_thread.emit("pipeline_stage_failed", PipelineStageFailed {
+                app_for_thread.emit("pipeline-stage-failed", PipelineStageFailed {
                     stage: $stage as u8,
                     error: $err.to_string(),
                 }).ok();
@@ -1265,7 +1315,7 @@ pub async fn retry_pipeline_from_stage(
 
         macro_rules! emit_done {
             ($stage:expr, $name:expr, $summary:expr) => {
-                app_for_thread.emit("pipeline_stage_done", PipelineStageDoneEvent {
+                app_for_thread.emit("pipeline-stage-done", PipelineStageDoneEvent {
                     stage: $stage as u8,
                     name: $name.to_string(),
                     summary: $summary.to_string(),

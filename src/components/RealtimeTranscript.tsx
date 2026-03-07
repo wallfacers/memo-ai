@@ -4,20 +4,30 @@ import { useMeetingStore } from "@/store/meetingStore";
 import type { StreamingSegment } from "@/types";
 
 export function RealtimeTranscript() {
-  const { realtimeSegments, appendRealtimeSegment } = useMeetingStore();
+  const { realtimeSegments, appendRealtimeSegments } = useMeetingStore();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const bufferRef = useRef<StreamingSegment[]>([]);
+  const rafRef = useRef<number>(0);
 
   useEffect(() => {
     const unlisten = listen<StreamingSegment>("funasr-segment", (event) => {
-      appendRealtimeSegment(event.payload);
+      bufferRef.current.push(event.payload);
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (bufferRef.current.length > 0) {
+          appendRealtimeSegments(bufferRef.current);
+          bufferRef.current = [];
+        }
+      });
     });
     return () => {
+      cancelAnimationFrame(rafRef.current);
       void unlisten.then((fn) => fn());
     };
-  }, [appendRealtimeSegment]);
+  }, [appendRealtimeSegments]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "instant" });
   }, [realtimeSegments]);
 
   if (realtimeSegments.length === 0) {

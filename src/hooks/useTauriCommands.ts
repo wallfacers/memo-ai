@@ -32,8 +32,13 @@ export function useStartRecording() {
   return useCallback((meetingId: number) => invoke<void>("start_recording", { meetingId }), []);
 }
 
+export interface StopRecordingResult {
+  audio_path: string;
+  recording_started_at: string;
+}
+
 export function useStopRecording() {
-  return useCallback((meetingId: number) => invoke<string>("stop_recording", { meetingId }), []);
+  return useCallback((meetingId: number) => invoke<StopRecordingResult>("stop_recording", { meetingId }), []);
 }
 
 // Transcript commands
@@ -47,8 +52,8 @@ export function useGetTranscripts() {
 // ASR command
 export function useTranscribeAudio() {
   return useCallback(
-    (audioPath: string, meetingId: number) =>
-      invoke<string>("transcribe_audio", { audioPath, meetingId }),
+    (audioPath: string, meetingId: number, recordingStartedAt: string) =>
+      invoke<string>("transcribe_audio", { audioPath, meetingId, recordingStartedAt }),
     []
   );
 }
