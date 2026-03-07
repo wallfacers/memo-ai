@@ -46,6 +46,7 @@ const zh = {
       pipeline: "AI 分析中…",
       done: "完成",
       error: "出错",
+      retryFromStage: "从此阶段重试",
     },
     status: {
       idle: "待录音",

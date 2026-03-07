@@ -46,6 +46,7 @@ const en = {
       pipeline: "AI analyzing…",
       done: "Done",
       error: "Error",
+      retryFromStage: "Retry from here",
     },
     status: {
       idle: "Idle",
