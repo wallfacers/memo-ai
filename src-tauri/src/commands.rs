@@ -280,6 +280,132 @@ pub async fn regenerate_summary(
     Ok(new_summary)
 }
 
+#[tauri::command]
+pub async fn regenerate_summary_stream(
+    meeting_id: i64,
+    app_handle: tauri::AppHandle,
+    db: State<'_, DbState>,
+    config: State<'_, ConfigState>,
+) -> Result<(), String> {
+    let cfg = (*config).0.lock().unwrap().clone();
+    let llm_config = LlmConfig {
+        provider: cfg.llm_provider.provider_type,
+        base_url: cfg.llm_provider.base_url,
+        model: cfg.llm_provider.model,
+        api_key: cfg.llm_provider.api_key,
+    };
+
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let prompts_dir = {
+        let exe_adjacent = exe_dir.join("prompts");
+        let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("prompts");
+        if exe_adjacent.exists() {
+            exe_adjacent
+        } else if dev_path.exists() {
+            dev_path
+        } else {
+            PathBuf::from("prompts")
+        }
+    };
+
+    let transcript_text = {
+        let conn = (*db).0.lock().unwrap();
+        let segments = models::get_transcripts(&conn, meeting_id).map_err(|e| e.to_string())?;
+        segments
+            .iter()
+            .map(|s| {
+                if let Some(ref speaker) = s.speaker {
+                    format!("{}：{}", speaker, s.text)
+                } else {
+                    s.text.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    if transcript_text.is_empty() {
+        let _ = app_handle.emit("summary_error", SummaryErrorEvent {
+            message: "No transcript available".into(),
+        });
+        return Ok(());
+    }
+
+    let app_for_cb = app_handle.clone();
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<String, String>>();
+
+    std::thread::spawn(move || {
+        let client = llm_config.build_client();
+        let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
+
+        // Stage 1
+        let _ = app_for_cb.emit("summary_stage", SummaryStageEvent {
+            stage: 1,
+            name: "正在清洗文本...".into(),
+        });
+        let clean = match pipeline.stage1_clean(&transcript_text) {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = app_for_cb.emit("summary_error", SummaryErrorEvent { message: e.to_string() });
+                let _ = tx.send(Err(e.to_string()));
+                return;
+            }
+        };
+
+        // Stage 2
+        let _ = app_for_cb.emit("summary_stage", SummaryStageEvent {
+            stage: 2,
+            name: "正在整理说话人...".into(),
+        });
+        let organized = match pipeline.stage2_speaker(&clean) {
+            Ok(o) => o,
+            Err(e) => {
+                let _ = app_for_cb.emit("summary_error", SummaryErrorEvent { message: e.to_string() });
+                let _ = tx.send(Err(e.to_string()));
+                return;
+            }
+        };
+
+        // Stage 4 (streaming)
+        let app_for_token = app_for_cb.clone();
+        let on_token: Box<dyn Fn(&str) + Send> = Box::new(move |token: &str| {
+            let _ = app_for_token.emit("summary_chunk", SummaryChunkEvent {
+                text: token.to_string(),
+            });
+        });
+
+        let result = pipeline.stage4_summary_streaming(&organized, on_token);
+        match result {
+            Ok(summary) => {
+                let _ = app_for_cb.emit("summary_done", SummaryDoneEvent {
+                    summary: summary.clone(),
+                });
+                let _ = tx.send(Ok(summary));
+            }
+            Err(e) => {
+                let _ = app_for_cb.emit("summary_error", SummaryErrorEvent { message: e.to_string() });
+                let _ = tx.send(Err(e.to_string()));
+            }
+        }
+    });
+
+    // 等待线程完成，写库
+    match rx.await {
+        Ok(Ok(summary)) => {
+            let conn = (*db).0.lock().unwrap();
+            models::update_meeting_summary(&conn, meeting_id, &summary)
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(Err(e)) => return Err(e),
+        Err(_) => return Err("Stream thread panicked".into()),
+    }
+
+    Ok(())
+}
+
 // ─── Transcript Commands ──────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -336,6 +462,27 @@ pub struct PipelineStageDoneEvent {
     pub stage: u8,
     pub name: String,
     pub summary: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct SummaryStageEvent {
+    pub stage: u8,
+    pub name: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct SummaryChunkEvent {
+    pub text: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct SummaryDoneEvent {
+    pub summary: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct SummaryErrorEvent {
+    pub message: String,
 }
 
 #[derive(Serialize)]
