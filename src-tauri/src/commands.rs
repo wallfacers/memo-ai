@@ -1172,3 +1172,258 @@ pub fn check_funasr_server(server_path: String) -> Result<FunAsrCheckResult, Str
         Err(msg) => Ok(FunAsrCheckResult { found: false, message: msg }),
     }
 }
+
+// ─── Pipeline Retry ───────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn retry_pipeline_from_stage(
+    meeting_id: i64,
+    from_stage: u32,
+    app_handle: tauri::AppHandle,
+    db: State<'_, DbState>,
+    config: State<'_, ConfigState>,
+) -> Result<PipelineResult, String> {
+    let cfg = (*config).0.lock().unwrap().clone();
+    let llm_config = LlmConfig {
+        provider: cfg.llm_provider.provider_type,
+        base_url: cfg.llm_provider.base_url,
+        model: cfg.llm_provider.model,
+        api_key: cfg.llm_provider.api_key,
+    };
+
+    // prompts_dir（与 run_pipeline 相同逻辑）
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let prompts_dir = {
+        let exe_adjacent = exe_dir.join("prompts");
+        let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("prompts");
+        if exe_adjacent.exists() { exe_adjacent }
+        else if dev_path.exists() { dev_path }
+        else { PathBuf::from("prompts") }
+    };
+
+    // 读取中间结果 + 原始 transcript + auto_titled
+    let (clean_opt, organized_opt, raw_transcript, auto_titled) = {
+        let db_state = app_handle.state::<DbState>();
+        let conn = db_state.0.lock().unwrap();
+        let (c, o) = models::get_pipeline_intermediates(&conn, meeting_id)
+            .map_err(|e| e.to_string())?;
+        let segments = models::get_transcripts(&conn, meeting_id).map_err(|e| e.to_string())?;
+        let raw = segments.iter().map(|s| {
+            if let Some(ref speaker) = s.speaker {
+                format!("{}：{}", speaker, s.text)
+            } else {
+                s.text.clone()
+            }
+        }).collect::<Vec<_>>().join("\n");
+        let auto_t = models::get_meeting(&conn, meeting_id)
+            .map(|m| m.auto_titled).unwrap_or(false);
+        (c, o, raw, auto_t)
+    };
+
+    // 降级：若所需中间数据缺失，从更早阶段开始
+    let actual_from_stage = if from_stage >= 3 && organized_opt.is_none() {
+        if clean_opt.is_none() { 1 } else { 2 }
+    } else if from_stage >= 2 && clean_opt.is_none() {
+        1
+    } else {
+        from_stage
+    };
+
+    // 清除 actual_from_stage 及之后的旧数据
+    {
+        let db_state = app_handle.state::<DbState>();
+        let conn = db_state.0.lock().unwrap();
+        models::clear_pipeline_from_stage(&conn, meeting_id, actual_from_stage)
+            .map_err(|e| e.to_string())?;
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let app_for_thread = app_handle.clone();
+
+    std::thread::spawn(move || {
+        let db_state = app_for_thread.state::<DbState>();
+        let client = llm_config.build_client();
+        let pipeline = Pipeline::new(client.as_ref(), &prompts_dir);
+
+        let mut clean: String = clean_opt.unwrap_or_default();
+        let mut organized: String = organized_opt.unwrap_or_default();
+
+        macro_rules! emit_failed {
+            ($stage:expr, $err:expr) => {{
+                app_for_thread.emit("pipeline_stage_failed", PipelineStageFailed {
+                    stage: $stage as u8,
+                    error: $err.to_string(),
+                }).ok();
+                let _ = tx.send(Err(crate::error::AppError::Llm($err.to_string())));
+                return;
+            }};
+        }
+
+        macro_rules! emit_done {
+            ($stage:expr, $name:expr, $summary:expr) => {
+                app_for_thread.emit("pipeline_stage_done", PipelineStageDoneEvent {
+                    stage: $stage as u8,
+                    name: $name.to_string(),
+                    summary: $summary.to_string(),
+                }).ok();
+            };
+        }
+
+        // Stage 1
+        if actual_from_stage <= 1 {
+            if raw_transcript.is_empty() {
+                emit_failed!(1u8, "No transcript available to process");
+            }
+            match pipeline.stage1_clean(&raw_transcript) {
+                Ok(v) => {
+                    emit_done!(1u8, "文本清洗", format!("完成（共 {} 字）", v.len()));
+                    let conn = db_state.0.lock().unwrap();
+                    if let Err(e) = models::update_clean_transcript(&conn, meeting_id, &v) {
+                        log::error!("Retry Stage 1 DB write failed: {}", e);
+                    }
+                    clean = v;
+                }
+                Err(e) => emit_failed!(1u8, e),
+            }
+        }
+
+        // Stage 2
+        if actual_from_stage <= 2 {
+            match pipeline.stage2_speaker(&clean) {
+                Ok(v) => {
+                    emit_done!(2u8, "说话人整理", v.chars().take(50).collect::<String>());
+                    let conn = db_state.0.lock().unwrap();
+                    if let Err(e) = models::update_organized_transcript(&conn, meeting_id, &v) {
+                        log::error!("Retry Stage 2 DB write failed: {}", e);
+                    }
+                    organized = v;
+                }
+                Err(e) => emit_failed!(2u8, e),
+            }
+        }
+
+        // Stage 3 (infallible)
+        if actual_from_stage <= 3 {
+            let structure = pipeline.stage3_structure(&organized);
+            let s3_summary = format!(
+                "主题：{} · 参会 {} 人 · {} 项决策",
+                structure.topic.as_deref().unwrap_or("未知"),
+                structure.participants.len(),
+                structure.decisions.len(),
+            );
+            emit_done!(3u8, "结构化提取", s3_summary);
+            let conn = db_state.0.lock().unwrap();
+            let _ = models::upsert_meeting_structure(
+                &conn, meeting_id,
+                structure.topic.as_deref(),
+                &structure.participants,
+                &structure.key_points,
+                &structure.decisions,
+                &structure.risks,
+            );
+        }
+
+        // Stage 4: summary
+        let summary = if actual_from_stage > 4 {
+            // Read existing summary from DB
+            let conn = db_state.0.lock().unwrap();
+            models::get_meeting(&conn, meeting_id).ok()
+                .and_then(|m| m.summary)
+                .unwrap_or_default()
+        } else {
+            match pipeline.stage4_summary(&organized) {
+                Ok(v) => {
+                    emit_done!(4u8, "会议总结", v.chars().take(100).collect::<String>());
+                    let conn = db_state.0.lock().unwrap();
+                    if let Err(e) = models::update_meeting_summary(&conn, meeting_id, &v) {
+                        log::error!("Retry Stage 4 DB write failed: {}", e);
+                    }
+                    v
+                }
+                Err(e) => { emit_failed!(4u8, e); }
+            }
+        };
+
+        // Stage 5: action items
+        let action_items = if actual_from_stage > 5 {
+            // Read existing action items from DB
+            let conn = db_state.0.lock().unwrap();
+            models::get_action_items(&conn, meeting_id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| crate::llm::pipeline::ActionItemRaw {
+                    task: a.task,
+                    owner: a.owner,
+                    deadline: a.deadline,
+                })
+                .collect::<Vec<_>>()
+        } else {
+            let items = pipeline.stage5_actions(&organized);
+            emit_done!(5u8, "行动项提取", format!("共 {} 项行动", items.len()));
+            let conn = db_state.0.lock().unwrap();
+            for item in &items {
+                if let Err(e) = models::insert_action_item(
+                    &conn, meeting_id,
+                    &item.task, item.owner.as_deref(), item.deadline.as_deref(),
+                ) {
+                    log::error!("Retry Stage 5 DB write failed: {}", e);
+                }
+            }
+            items
+        };
+
+        // Stage 6
+        let actions_json = match serde_json::to_string(&action_items) {
+            Ok(j) => j,
+            Err(e) => { emit_failed!(6u8, e); }
+        };
+        let report = match pipeline.stage6_report(&summary, &actions_json) {
+            Ok(v) => {
+                emit_done!(6u8, "报告生成", "报告已生成，点击查看");
+                let conn = db_state.0.lock().unwrap();
+                if let Err(e) = models::update_meeting_summary_report(&conn, meeting_id, &summary, &v) {
+                    log::error!("Retry Stage 6 DB write failed: {}", e);
+                }
+                v
+            }
+            Err(e) => { emit_failed!(6u8, e); }
+        };
+
+        // Stage 7 (optional)
+        let generated_title = if auto_titled {
+            match pipeline.stage7_title(&summary) {
+                Ok(t) => {
+                    let conn = db_state.0.lock().unwrap();
+                    let _ = models::update_meeting_title(&conn, meeting_id, &t);
+                    Some(t)
+                }
+                Err(e) => { log::warn!("Retry Stage 7 failed: {}", e); None }
+            }
+        } else {
+            None
+        };
+
+        let _ = tx.send(Ok(PipelineOutput {
+            clean_transcript: clean,
+            structure: Default::default(),
+            summary,
+            action_items,
+            report,
+            generated_title,
+        }));
+    });
+
+    let output = rx.await
+        .map_err(|_| "Pipeline retry thread panicked".to_string())?
+        .map_err(|e| e.to_string())?;
+
+    Ok(PipelineResult {
+        clean_transcript: output.clean_transcript,
+        summary: output.summary,
+        report: output.report,
+        generated_title: output.generated_title,
+    })
+}

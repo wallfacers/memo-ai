@@ -6,7 +6,7 @@ use super::client::LlmClient;
 /// 阶段完成回调：(stage编号 1-6, 阶段名称, 结果摘要)
 pub type StageCallback = Box<dyn Fn(u8, &str, &str) + Send>;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct StructuredMeeting {
     pub topic: Option<String>,
     pub participants: Vec<String>,
