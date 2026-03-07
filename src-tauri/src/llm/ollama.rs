@@ -20,6 +20,12 @@ struct OllamaResponse {
     response: String,
 }
 
+#[derive(Deserialize)]
+struct OllamaStreamChunk {
+    response: String,
+    done: bool,
+}
+
 impl OllamaClient {
     pub fn new(base_url: String, model: String) -> Self {
         OllamaClient {
@@ -59,6 +65,53 @@ impl LlmClient for OllamaClient {
             .json()
             .map_err(|e| AppError::Llm(format!("Failed to parse Ollama response: {}", e)))?;
         Ok(body.response)
+    }
+
+    fn complete_streaming(
+        &self,
+        prompt: &str,
+        on_token: Box<dyn Fn(&str) + Send>,
+    ) -> AppResult<String> {
+        use std::io::BufRead;
+
+        let url = format!("{}/api/generate", self.base_url.trim_end_matches('/'));
+        let req = OllamaRequest {
+            model: &self.model,
+            prompt,
+            stream: true,
+        };
+        let resp = self
+            .http
+            .post(&url)
+            .json(&req)
+            .send()
+            .map_err(|e| AppError::Llm(format!("Ollama streaming request failed: {}", e)))?;
+
+        if !resp.status().is_success() {
+            return Err(AppError::Llm(format!(
+                "Ollama returned status {}",
+                resp.status()
+            )));
+        }
+
+        let mut full_text = String::new();
+        let reader = std::io::BufReader::new(resp);
+        for line in reader.lines() {
+            let line = line.map_err(|e| AppError::Llm(format!("Stream read error: {}", e)))?;
+            if line.is_empty() {
+                continue;
+            }
+            let chunk: OllamaStreamChunk = serde_json::from_str(&line)
+                .map_err(|e| AppError::Llm(format!("Failed to parse stream chunk: {}", e)))?;
+            if !chunk.response.is_empty() {
+                on_token(&chunk.response);
+                full_text.push_str(&chunk.response);
+            }
+            if chunk.done {
+                break;
+            }
+        }
+        Ok(full_text)
     }
 
     fn provider_name(&self) -> &str {
