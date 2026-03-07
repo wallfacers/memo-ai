@@ -36,6 +36,16 @@ impl LlmClient for MockLlmClient {
         Ok(self.responses[idx].clone())
     }
 
+    fn complete_streaming(
+        &self,
+        _prompt: &str,
+        on_token: Box<dyn Fn(&str) + Send>,
+    ) -> AppResult<String> {
+        let response = self.complete(_prompt)?;
+        on_token(&response);
+        Ok(response)
+    }
+
     fn provider_name(&self) -> &str {
         "mock"
     }
