@@ -51,14 +51,14 @@ pip install -r requirements_server.txt
 ## 步骤四：启动 FunASR WebSocket 服务器
 
 ```powershell
-python funasr_wss_server.py --certfile 0 --host 0.0.0.0 --port 10095 --asr_model paraformer-zh --vad_model fsmn-vad --punc_model ct-punc
+python funasr_wss_server.py --certfile "" --host 0.0.0.0 --port 10095 --asr_model paraformer-zh --vad_model fsmn-vad --punc_model ct-punc
 ```
 
 **参数说明：**
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
-| `--certfile 0` | 0 | 禁用 TLS，使用 ws:// 明文连接 |
+| `--certfile ""` | 空字符串 | 禁用 TLS，使用 ws:// 明文连接（注意：传 `0` 无效，脚本用字符串长度判断） |
 | `--host` | 0.0.0.0 | 监听所有网卡 |
 | `--port` | 10095 | 默认端口 |
 | `--asr_model` | paraformer-zh | 中文 ASR 模型 |
