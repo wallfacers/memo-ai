@@ -163,3 +163,20 @@ export function useCheckFunAsrServer() {
     []
   );
 }
+
+// Summary commands
+export function useUpdateMeetingSummary() {
+  return useCallback(
+    (id: number, summary: string) =>
+      invoke<void>("update_meeting_summary", { id, summary }),
+    []
+  );
+}
+
+export function useRegenerateSummary() {
+  return useCallback(
+    (meetingId: number) =>
+      invoke<string>("regenerate_summary", { meetingId }),
+    []
+  );
+}
