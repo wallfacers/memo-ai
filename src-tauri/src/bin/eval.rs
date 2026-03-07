@@ -118,7 +118,7 @@ fn run_fixture(
 
     let (llm_score, llm_reason) = if !no_llm_judge
         && code_result.score >= 0.6
-        && fixture.expected.golden_summary.is_some()
+        && fixture.expected.golden_summary.as_deref().map(|s| !s.is_empty()).unwrap_or(false)
     {
         match grader_llm::grade(
             client,

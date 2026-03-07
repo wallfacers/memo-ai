@@ -42,6 +42,7 @@ pub struct ActionItem {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct MeetingStructure {
     pub id: i64,
     pub meeting_id: i64,
@@ -302,6 +303,7 @@ pub fn get_pipeline_intermediates(
     Ok(result)
 }
 
+#[allow(dead_code)]
 pub fn delete_action_items_for_meeting(conn: &Connection, meeting_id: i64) -> AppResult<()> {
     conn.execute(
         "DELETE FROM action_items WHERE meeting_id = ?1",

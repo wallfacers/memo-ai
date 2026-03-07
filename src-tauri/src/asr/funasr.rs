@@ -375,6 +375,7 @@ impl AsrProvider for FunAsrBatchProvider {
 /// 策略：
 /// 1. batch 非空 → 直接使用 batch（精度更高）
 /// 2. batch 为空（转写失败/超时）→ 降级使用 streaming final 段
+#[allow(dead_code)]
 pub fn smart_merge(
     batch: &[TranscriptSegment],
     streaming: &[StreamingSegment],

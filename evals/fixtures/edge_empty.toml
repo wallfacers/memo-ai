@@ -10,4 +10,3 @@ raw_transcript = "嗯。好的。散会。"
 summary_must_contain = []
 min_action_items = 0
 required_participants = []
-golden_summary = ""

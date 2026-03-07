@@ -18,9 +18,11 @@ pub struct FunAsrState(pub Mutex<Option<FunAsrSessionHolder>>);
 
 pub struct FunAsrSessionHolder {
     pub session: Box<dyn StreamingAsrSession>,
+    #[allow(dead_code)]
     pub collected_finals: Vec<StreamingSegment>,
     // 持有 FunAsrServer，确保进程在 session 整个生命周期内存活
     // session drop 时自动触发 FunAsrServer::drop() → 进程终止
+    #[allow(dead_code)]
     server: Option<crate::process::FunAsrServer>,
 }
 

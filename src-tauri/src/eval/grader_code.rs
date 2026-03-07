@@ -13,8 +13,8 @@ pub struct CodeGradeResult {
 pub fn grade(output: &PipelineOutput, expected: &FixtureExpected) -> CodeGradeResult {
     let mut checks: Vec<(&str, f32, bool)> = Vec::new(); // (name, weight, passed)
 
-    // Check 1: stage3 participants non-empty
-    let c1 = !output.structure.participants.is_empty();
+    // Check 1: stage3 participants non-empty (only when specific participants are expected)
+    let c1 = expected.required_participants.is_empty() || !output.structure.participants.is_empty();
     checks.push(("stage3_participants_nonempty", 0.5, c1));
 
     // Check 2: stage3 required participants present

@@ -16,6 +16,7 @@ pub struct StreamingSegment {
 
 pub trait StreamingAsrSession: Send {
     /// 发送一段 PCM 16-bit 16kHz mono 音频数据（每次约 160ms）
+    #[allow(dead_code)]
     fn send_audio_chunk(&mut self, pcm: &[i16]) -> AppResult<()>;
     /// 通知服务器录音结束，阻塞等待所有 final 结果返回（最长 8 秒超时）
     fn finish(&mut self) -> AppResult<Vec<StreamingSegment>>;

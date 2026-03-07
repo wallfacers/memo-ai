@@ -5,6 +5,7 @@ use crate::commands::AppConfig;
 
 pub trait AsrProvider: Send {
     fn transcribe(&self, audio_path: &Path) -> AppResult<Vec<TranscriptSegment>>;
+    #[allow(dead_code)]
     fn name(&self) -> &'static str;
 }
 

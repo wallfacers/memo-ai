@@ -9,6 +9,7 @@ pub struct AliyunAsr {
     app_key: String,
     access_key_id: String,
     access_key_secret: String,
+    #[allow(dead_code)]
     language: String,
 }
 

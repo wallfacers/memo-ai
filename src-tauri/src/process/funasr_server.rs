@@ -68,6 +68,7 @@ impl FunAsrServer {
         self.child = None;
     }
 
+    #[allow(dead_code)]
     pub fn is_managed(&self) -> bool {
         self.child.is_some()
     }

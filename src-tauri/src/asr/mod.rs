@@ -5,5 +5,5 @@ pub mod aliyun;
 pub mod funasr;
 pub mod streaming;
 
-pub use provider::{AsrProvider, build_asr};
+pub use provider::build_asr;
 pub use streaming::{StreamingAsrSession, StreamingSegment};

@@ -5,8 +5,10 @@
 /// For now, cpal's default input (microphone) is used on all platforms.
 /// To mix system audio on Windows, enable this module and blend channels.
 
+#[allow(dead_code)]
 pub struct WasapiLoopback;
 
+#[allow(dead_code)]
 impl WasapiLoopback {
     pub fn new() -> Self {
         WasapiLoopback
