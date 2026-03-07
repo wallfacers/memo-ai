@@ -13,7 +13,7 @@ interface SummaryTabProps {
   onSummaryUpdated: (newSummary: string) => void;
 }
 
-type RegeneratePhase = "idle" | "stage1" | "stage2" | "stage4" | "streaming" | "done";
+type RegeneratePhase = "idle" | "stage1" | "stage2" | "stage4" | "streaming";
 
 export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
   const { t } = useTranslation();
@@ -150,7 +150,7 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
 
   const isProcessing = meeting.status === "processing";
   const isRegenerating = regenPhase !== "idle";
-  const hasSummary = !!(regenPhase === "done" ? streamingText : meeting.summary);
+  const hasSummary = !!meeting.summary;
 
   const stageLabel =
     regenPhase === "stage1" ? t("summary.actions.stage1") :
@@ -225,10 +225,10 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
           onChange={handleTextChange}
           autoFocus
         />
-      ) : (regenPhase === "done" ? streamingText : meeting.summary) ? (
+      ) : meeting.summary ? (
         <div className="p-4 text-sm leading-relaxed text-foreground prose prose-sm max-w-none dark:prose-invert">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {regenPhase === "done" ? streamingText : meeting.summary!}
+            {meeting.summary}
           </ReactMarkdown>
         </div>
       ) : (
