@@ -93,6 +93,11 @@ export interface PipelineStageDoneEvent {
   elapsed_ms: number;
 }
 
+export interface PipelineStageFailed {
+  stage: number;
+  error: string;
+}
+
 export interface PipelineResult {
   clean_transcript: string;
   summary: string;

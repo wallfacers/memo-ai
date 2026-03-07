@@ -26,6 +26,8 @@ interface MeetingStore {
   clearRealtimeSegments: () => void;
   appendPipelineStage: (stage: PipelineStageDoneEvent) => void;
   clearPipelineStages: () => void;
+  pipelineFailedStage: { stage: number; error: string } | null;
+  setPipelineFailedStage: (info: { stage: number; error: string } | null) => void;
 }
 
 export const useMeetingStore = create<MeetingStore>((set) => ({
@@ -38,6 +40,7 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
   recordingPhase: "idle",
   realtimeSegments: [],
   pipelineStages: [],
+  pipelineFailedStage: null,
 
   setMeetings: (meetings) => set({ meetings }),
   setCurrentMeeting: (meeting) => set({ currentMeeting: meeting, transcripts: [], actionItems: [] }),
@@ -69,4 +72,5 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
   appendPipelineStage: (stage) =>
     set((state) => ({ pipelineStages: [...state.pipelineStages, stage] })),
   clearPipelineStages: () => set({ pipelineStages: [] }),
+  setPipelineFailedStage: (info) => set({ pipelineFailedStage: info }),
 }));

@@ -180,3 +180,11 @@ export function useRegenerateSummaryStream() {
     []
   );
 }
+
+export function useRetryPipelineFromStage() {
+  return useCallback(
+    (meetingId: number, fromStage: number) =>
+      invoke<PipelineResult>("retry_pipeline_from_stage", { meetingId, fromStage }),
+    []
+  );
+}
