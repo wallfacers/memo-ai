@@ -103,9 +103,15 @@ fn run_ws_loop(
     result_tx: SyncSender<StreamingSegment>,
     event_tx: SyncSender<StreamingSegment>,
 ) -> AppResult<()> {
-    use tungstenite::{connect, Message};
+    use tungstenite::{connect, Message, client::IntoClientRequest};
 
-    let (mut ws, _) = connect(ws_url)
+    let mut request = ws_url.into_client_request()
+        .map_err(|e| AppError::Asr(format!("FunASR WebSocket request build failed: {}", e)))?;
+    request.headers_mut().insert(
+        "Sec-WebSocket-Protocol",
+        "binary".parse().unwrap(),
+    );
+    let (mut ws, _) = connect(request)
         .map_err(|e| AppError::Asr(format!("FunASR WebSocket connect failed ({}): {}", ws_url, e)))?;
 
     // 设置非阻塞读取超时（10ms），使主循环可以持续处理音频发送
@@ -271,20 +277,29 @@ impl AsrProvider for FunAsrBatchProvider {
     }
 
     fn transcribe(&self, audio_path: &Path) -> AppResult<Vec<TranscriptSegment>> {
-        use tungstenite::{connect, Message};
+        use tungstenite::{connect, Message, client::IntoClientRequest};
 
         let audio_bytes = std::fs::read(audio_path)
             .map_err(|e| AppError::Asr(format!("Failed to read audio file: {}", e)))?;
 
-        let (mut ws, _) = connect(&self.ws_url)
+        let mut request = self.ws_url.as_str().into_client_request()
+            .map_err(|e| AppError::Asr(format!("FunASR batch request build failed: {}", e)))?;
+        request.headers_mut().insert(
+            "Sec-WebSocket-Protocol",
+            "binary".parse().unwrap(),
+        );
+        let (mut ws, _) = connect(request)
             .map_err(|e| AppError::Asr(format!("FunASR batch connect failed: {}", e)))?;
 
-        // offline 模式握手
+        // offline 模式握手（chunk_size 必须设置，否则服务器拒绝处理音频帧）
         let handshake = serde_json::json!({
             "mode": "offline",
             "wav_name": "batch",
             "wav_format": "wav",
             "is_speaking": true,
+            "chunk_size": [5, 10, 5],
+            "encoder_chunk_look_back": 4,
+            "decoder_chunk_look_back": 0,
         });
         ws.send(Message::Text(handshake.to_string()))
             .map_err(|e| AppError::Asr(format!("FunASR batch handshake failed: {}", e)))?;
