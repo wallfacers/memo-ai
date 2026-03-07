@@ -1180,7 +1180,6 @@ pub async fn retry_pipeline_from_stage(
     meeting_id: i64,
     from_stage: u32,
     app_handle: tauri::AppHandle,
-    db: State<'_, DbState>,
     config: State<'_, ConfigState>,
 ) -> Result<PipelineResult, String> {
     let cfg = (*config).0.lock().unwrap().clone();
