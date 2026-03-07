@@ -3,7 +3,7 @@ mod asr;
 mod commands;
 mod db;
 mod error;
-mod llm;
+pub mod llm;
 pub mod eval;
 mod process;
 
