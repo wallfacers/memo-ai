@@ -476,7 +476,7 @@ pub struct PipelineStageDoneEvent {
 
 #[derive(Serialize, Clone)]
 pub struct PipelineStageFailed {
-    pub stage: u32,
+    pub stage: u8,
     pub error: String,
 }
 
@@ -609,7 +609,9 @@ pub async fn run_pipeline(
             |v: &String| format!("完成（共 {} 字）", v.len()));
         {
             let conn = db_state.0.lock().unwrap();
-            let _ = models::update_clean_transcript(&conn, meeting_id, &clean);
+            if let Err(e) = models::update_clean_transcript(&conn, meeting_id, &clean) {
+                log::error!("Stage 1 DB write failed (clean_transcript): {}", e);
+            }
         }
 
         // Stage 2
@@ -618,7 +620,9 @@ pub async fn run_pipeline(
             |v: &String| v.chars().take(50).collect::<String>());
         {
             let conn = db_state.0.lock().unwrap();
-            let _ = models::update_organized_transcript(&conn, meeting_id, &organized);
+            if let Err(e) = models::update_organized_transcript(&conn, meeting_id, &organized) {
+                log::error!("Stage 2 DB write failed (organized_transcript): {}", e);
+            }
         }
 
         // Stage 3 (infallible)
@@ -652,7 +656,9 @@ pub async fn run_pipeline(
             |v: &String| v.chars().take(100).collect::<String>());
         {
             let conn = db_state.0.lock().unwrap();
-            let _ = models::update_meeting_summary(&conn, meeting_id, &summary);
+            if let Err(e) = models::update_meeting_summary(&conn, meeting_id, &summary) {
+                log::error!("Stage 4 DB write failed (meeting_summary): {}", e);
+            }
         }
 
         // Stage 5 (infallible)
@@ -665,10 +671,12 @@ pub async fn run_pipeline(
         {
             let conn = db_state.0.lock().unwrap();
             for item in &action_items {
-                let _ = models::insert_action_item(
+                if let Err(e) = models::insert_action_item(
                     &conn, meeting_id,
                     &item.task, item.owner.as_deref(), item.deadline.as_deref(),
-                );
+                ) {
+                    log::error!("Stage 5 DB write failed (insert_action_item): {}", e);
+                }
             }
         }
 
@@ -689,7 +697,9 @@ pub async fn run_pipeline(
             |_: &String| "报告已生成，点击查看".to_string());
         {
             let conn = db_state.0.lock().unwrap();
-            let _ = models::update_meeting_summary_report(&conn, meeting_id, &summary, &report);
+            if let Err(e) = models::update_meeting_summary_report(&conn, meeting_id, &summary, &report) {
+                log::error!("Stage 6 DB write failed (meeting_summary_report): {}", e);
+            }
         }
 
         // Stage 7 (optional title)
