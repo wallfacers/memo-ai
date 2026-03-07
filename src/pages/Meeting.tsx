@@ -124,6 +124,7 @@ export function Meeting() {
     setRecordingPhase("connecting");
     clearRealtimeSegments();
     clearPipelineStages();
+    setPipelineFailedStage(null);
     try {
       if (settings.funasr_enabled) {
         await startFunAsrSession(meetingId!);

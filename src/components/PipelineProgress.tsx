@@ -85,9 +85,9 @@ export function PipelineProgress({ onRetryFromStage }: PipelineProgressProps) {
                 >
                   {stageName}
                 </span>
-                {done && stageData && (
-                  <span className="ml-auto text-muted-foreground">
-                    {stageData.elapsed_ms}ms
+                {done && stageData?.summary && (
+                  <span className="ml-auto text-muted-foreground truncate max-w-[180px]">
+                    {stageData.summary.length > 40 ? stageData.summary.slice(0, 40) + "…" : stageData.summary}
                   </span>
                 )}
                 {isFailed && (

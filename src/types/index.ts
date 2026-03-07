@@ -90,7 +90,7 @@ export interface StreamingSegment {
 export interface PipelineStageDoneEvent {
   stage: number;
   name: string;
-  elapsed_ms: number;
+  summary: string;
 }
 
 export interface PipelineStageFailed {

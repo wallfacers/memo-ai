@@ -341,6 +341,7 @@ pub fn clear_pipeline_from_stage(conn: &Connection, meeting_id: i64, from_stage:
             "UPDATE meetings SET summary = NULL, report = NULL, updated_at = ?1 WHERE id = ?2",
             params![now, meeting_id],
         )?;
+        conn.execute("DELETE FROM action_items WHERE meeting_id = ?1", params![meeting_id])?;
     } else if from_stage <= 5 {
         conn.execute(
             "UPDATE meetings SET report = NULL, updated_at = ?1 WHERE id = ?2",
