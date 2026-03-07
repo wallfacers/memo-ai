@@ -14,7 +14,7 @@ use commands::{
     search_meetings, start_recording, stop_recording, test_asr_connection, test_llm_connection,
     transcribe_audio, update_action_item_status,
     start_funasr_session, stop_funasr_session, check_funasr_server,
-    update_meeting_summary, regenerate_summary,
+    update_meeting_summary, regenerate_summary, regenerate_summary_stream,
 };
 use std::sync::Mutex;
 use tauri::Manager;
@@ -92,6 +92,7 @@ pub fn run() {
             check_funasr_server,
             update_meeting_summary,
             regenerate_summary,
+            regenerate_summary_stream,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
