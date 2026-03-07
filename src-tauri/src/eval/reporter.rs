@@ -22,7 +22,8 @@ pub fn generate(results: &[EvalResult]) -> String {
         ));
     }
 
-    out.push_str(&format!("\n**总体通过率：{}/{}（{:.0}%）**\n", passed, total, passed as f32 / total as f32 * 100.0));
+    let pass_pct = if total == 0 { 0.0 } else { passed as f32 / total as f32 * 100.0 };
+    out.push_str(&format!("\n**总体通过率：{}/{}（{:.0}%）**\n", passed, total, pass_pct));
     if let Some(avg) = avg_llm {
         out.push_str(&format!("**平均 LLM 评分：{:.2}**\n", avg));
     }
