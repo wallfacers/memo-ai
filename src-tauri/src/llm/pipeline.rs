@@ -223,3 +223,73 @@ fn extract_json(text: &str) -> &str {
     }
     text
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::mock_client::MockLlmClient;
+    use std::path::Path;
+
+    fn prompts_dir() -> &'static Path {
+        Path::new("../prompts")
+    }
+
+    #[test]
+    fn test_stage3_returns_empty_struct_on_invalid_json() {
+        let mock = MockLlmClient::new(vec!["this is not json"]);
+        let pipeline = Pipeline::new(&mock, prompts_dir());
+        let result = pipeline.stage3_structure("任意输入");
+        assert!(result.participants.is_empty());
+        assert!(result.topic.is_none());
+    }
+
+    #[test]
+    fn test_stage3_parses_valid_json() {
+        let json = r#"{
+            "topic": "缓存方案评审",
+            "participants": ["张三", "李四"],
+            "key_points": ["采用 Redis"],
+            "decisions": ["使用 Redis 集群"],
+            "risks": []
+        }"#;
+        let mock = MockLlmClient::with_json(json);
+        let pipeline = Pipeline::new(&mock, prompts_dir());
+        let result = pipeline.stage3_structure("输入文本");
+        assert_eq!(result.topic.as_deref(), Some("缓存方案评审"));
+        assert_eq!(result.participants.len(), 2);
+    }
+
+    #[test]
+    fn test_stage5_returns_empty_vec_on_invalid_json() {
+        let mock = MockLlmClient::new(vec!["not json"]);
+        let pipeline = Pipeline::new(&mock, prompts_dir());
+        let result = pipeline.stage5_actions("输入文本");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_stage5_parses_action_items() {
+        let json = r#"[
+            {"task": "方案细化", "owner": "李四", "deadline": "下周五"},
+            {"task": "压测", "owner": "王五", "deadline": "周三"}
+        ]"#;
+        let mock = MockLlmClient::with_json(json);
+        let pipeline = Pipeline::new(&mock, prompts_dir());
+        let result = pipeline.stage5_actions("输入文本");
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].task, "方案细化");
+        assert_eq!(result[0].owner.as_deref(), Some("李四"));
+    }
+
+    #[test]
+    fn test_extract_json_strips_markdown_fence() {
+        let input = "```json\n{\"key\":\"value\"}\n```";
+        assert_eq!(extract_json(input), "{\"key\":\"value\"}");
+    }
+
+    #[test]
+    fn test_extract_json_passthrough_plain() {
+        let input = r#"{"key":"value"}"#;
+        assert_eq!(extract_json(input), r#"{"key":"value"}"#);
+    }
+}
