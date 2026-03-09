@@ -25,6 +25,7 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
   const [streamingText, setStreamingText] = useState("");
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unlistenRef = useRef<UnlistenFn[]>([]);
+  const streamingEndRef = useRef<HTMLDivElement | null>(null);
   const updateMeetingSummary = useUpdateMeetingSummary();
   const regenerateSummaryStream = useRegenerateSummaryStream();
 
@@ -45,6 +46,13 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
       });
     }, 1000);
   }, [meeting.id, updateMeetingSummary, onSummaryUpdated]);
+
+  // streaming 时自动滚动到底部
+  useEffect(() => {
+    if (regenPhase === "streaming") {
+      streamingEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [streamingText, regenPhase]);
 
   // 卸载时取消 debounce timer 并清理事件监听
   useEffect(() => {
@@ -228,9 +236,12 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
           <StageProgressList stages={regenStages} title="重新生成中" />
         </div>
       ) : regenPhase === "streaming" ? (
-        <div className="px-4 py-2 text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">
-          {streamingText}
-          <span className="inline-block w-0.5 h-4 bg-foreground ml-0.5 animate-pulse" />
+        <div className="p-4 text-sm leading-relaxed text-foreground prose prose-sm max-w-none dark:prose-invert">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {streamingText}
+          </ReactMarkdown>
+          <span className="inline-block w-0.5 h-4 bg-foreground ml-0.5 animate-pulse align-middle" />
+          <div ref={streamingEndRef} />
         </div>
       ) : isEditing ? (
         <textarea
