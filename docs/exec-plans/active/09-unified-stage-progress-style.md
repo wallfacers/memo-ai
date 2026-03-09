@@ -2,26 +2,28 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 提取公共 `StageProgressList` 展示组件，统一 `PipelineProgress`（首次处理）和 `SummaryTab`（重新生成）两处 AI 处理进度的视觉语言，使用户在两种场景下看到一致的阶段清单样式。
+**Goal:** 将 `SummaryTab` 重新生成进度从单行 spinner 升级为 3 阶段清单，与 `PipelineProgress` 的视觉风格保持一致。
 
-**Background:** 经过评估，两个进度功能业务逻辑不能合并（触发时机、事件来源、位置不同），但视觉风格可以也应该统一。当前差异：
-- `PipelineProgress`：清单列表，所有阶段同时可见，有 checkmark/spinner/pending 三态
-- `SummaryTab` 重新生成：仅显示当前阶段的单行文字，其他阶段不可见，信息密度低
+**Background:**
+- `PipelineProgress`（首次处理）：6 行清单，全部阶段同时可见，4 态（done/failed/active/pending）
+- `SummaryTab` 重新生成：仅显示单行当前阶段名 + spinner，其他阶段不可见，信息密度低
+- 目标：`SummaryTab` 进度区也改为全阶段清单，视觉语言一致
 
-**Architecture:** 提取纯展示层 `StageProgressList` 组件，`PipelineProgress` 和 `SummaryTab` 各自保持独立业务逻辑，共用同一视觉组件。
+**Architecture:**
+- 提取纯展示层 `StageProgressList` 组件（仅 done/active/pending 三态，无 failed），专供 `SummaryTab` 使用
+- `PipelineProgress` **不动**：它已实现 failed 态 + 重试按钮 + 错误文本，远超 `StageProgressList` 能力，重构会 regression plan-08 功能
+- 两处视觉一致通过"SummaryTab 外观向 PipelineProgress 看齐"实现，而非强制共用组件
 
 **Tech Stack:** React / TypeScript / Tailwind CSS / lucide-react
 
 ---
 
-## Task 1: 提取 StageProgressList 组件
+## Task 1: 创建 StageProgressList 组件
 
 **Files:**
 - Create: `src/components/StageProgressList.tsx`
 
 **Step 1: 创建组件**
-
-新建文件，内容如下：
 
 ```typescript
 import { CheckCircle2, Loader2 } from "lucide-react";
@@ -30,7 +32,6 @@ export interface StageItem {
   key: string | number;
   label: string;
   status: "done" | "active" | "pending";
-  elapsedMs?: number;
 }
 
 interface StageProgressListProps {
@@ -40,7 +41,7 @@ interface StageProgressListProps {
 
 export function StageProgressList({ stages, title }: StageProgressListProps) {
   return (
-    <div className="w-full max-w-lg rounded-lg border border-border bg-muted/30 px-4 py-3 space-y-2">
+    <div className="w-full rounded-lg border border-border bg-muted/30 px-4 py-3 space-y-2">
       {title && <p className="text-xs font-medium text-foreground">{title}</p>}
       <div className="space-y-1">
         {stages.map((stage) => (
@@ -55,9 +56,6 @@ export function StageProgressList({ stages, title }: StageProgressListProps) {
             <span className={stage.status === "done" ? "text-foreground" : "text-muted-foreground"}>
               {stage.label}
             </span>
-            {stage.status === "done" && stage.elapsedMs !== undefined && (
-              <span className="ml-auto text-muted-foreground">{stage.elapsedMs}ms</span>
-            )}
           </div>
         ))}
       </div>
@@ -65,6 +63,11 @@ export function StageProgressList({ stages, title }: StageProgressListProps) {
   );
 }
 ```
+
+注意：
+- 不包含 `"failed"` 状态——`SummaryTab` 重新生成没有失败态（失败直接回到 idle），此处无需
+- 不包含 `elapsedMs`——重新生成不记录耗时
+- 不包含 retry 按钮——这是 `PipelineProgress` 专属逻辑
 
 **Step 2: 类型检查**
 
@@ -78,149 +81,69 @@ Expected: 无 error。
 
 ```bash
 git add src/components/StageProgressList.tsx
-git commit -m "feat(ui): add StageProgressList shared component"
+git commit -m "feat(ui): add StageProgressList shared component for stage progress display"
 ```
 
 ---
 
-## Task 2: 改造 PipelineProgress 使用 StageProgressList
-
-**Files:**
-- Modify: `src/components/PipelineProgress.tsx`
-
-**Step 1: 理解当前实现**
-
-当前组件在内部直接渲染阶段列表（CheckCircle2/Loader2/空心圆），需要改为调用 `StageProgressList`，传入构造好的 `StageItem[]`。
-
-**Step 2: 替换实现**
-
-将文件内容替换为：
-
-```typescript
-import { useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { useMeetingStore } from "@/store/meetingStore";
-import type { PipelineStageDoneEvent } from "@/types";
-import { StageProgressList, type StageItem } from "@/components/StageProgressList";
-
-const STAGE_NAMES: Record<number, string> = {
-  1: "文本清洗",
-  2: "说话人整理",
-  3: "结构化提取",
-  4: "会议总结",
-  5: "行动项提取",
-  6: "报告生成",
-};
-
-const TOTAL_STAGES = 6;
-
-export function PipelineProgress() {
-  const { pipelineStages, appendPipelineStage, recordingPhase } = useMeetingStore();
-
-  useEffect(() => {
-    const unlisten = listen<PipelineStageDoneEvent>("pipeline-stage-done", (event) => {
-      appendPipelineStage(event.payload);
-    });
-    return () => {
-      void unlisten.then((fn) => fn());
-    };
-  }, [appendPipelineStage]);
-
-  const completedStageNums = new Set(pipelineStages.map((s) => s.stage));
-
-  const stages: StageItem[] = Array.from({ length: TOTAL_STAGES }, (_, i) => {
-    const stageNum = i + 1;
-    const done = completedStageNums.has(stageNum);
-    const isActive =
-      recordingPhase === "pipeline" &&
-      !done &&
-      stageNum === pipelineStages.length + 1;
-    const stageData = pipelineStages.find((s) => s.stage === stageNum);
-
-    return {
-      key: stageNum,
-      label: STAGE_NAMES[stageNum] ?? `阶段 ${stageNum}`,
-      status: done ? "done" : isActive ? "active" : "pending",
-      elapsedMs: stageData?.elapsed_ms,
-    };
-  });
-
-  return <StageProgressList stages={stages} title="AI 分析进度" />;
-}
-```
-
-**Step 3: 编译验证**
-
-```bash
-npx tsc --noEmit 2>&1 | tail -5
-```
-
-Expected: 无 error。
-
-**Step 4: Commit**
-
-```bash
-git add src/components/PipelineProgress.tsx
-git commit -m "refactor(PipelineProgress): use StageProgressList for unified style"
-```
-
----
-
-## Task 3: 改造 SummaryTab 重新生成进度使用 StageProgressList
+## Task 2: 更新 SummaryTab 使用 StageProgressList
 
 **Files:**
 - Modify: `src/components/SummaryTab.tsx`
 
-**Step 1: 理解当前实现**
-
-当前在 `regenPhase === "stage1" | "stage2" | "stage4"` 时，渲染：
-```tsx
-<div className="flex items-center gap-2 px-4 py-12 ...">
-  <Loader2 ... />
-  <span>{stageLabel}</span>
-</div>
-```
-
-只显示单行当前阶段，其他阶段不可见。改为显示 3 阶段清单：
-- stage 1：文本清洗
-- stage 2：说话人整理
-- stage 4（逻辑上第 3 步）：生成总结
-
-**Step 2: 新增 import**
+**Step 1: 添加 import**
 
 在文件顶部 import 区添加：
+
 ```typescript
 import { StageProgressList, type StageItem } from "@/components/StageProgressList";
 ```
 
-**Step 3: 新增 regenStages 计算逻辑**
+同时移除不再需要的 `Loader2` import（确认其他地方没有用到后再删）。
 
-在 `const isProcessing = ...` 附近，添加以下计算：
+**Step 2: 删除 stageLabel 变量**
+
+删除第 155-158 行的 `stageLabel` 计算：
 
 ```typescript
-const REGEN_STAGE_ORDER: Array<{ phase: RegeneratePhase; label: string }> = [
+// 删除以下代码：
+const stageLabel =
+  regenPhase === "stage1" ? t("summary.actions.stage1") :
+  regenPhase === "stage2" ? t("summary.actions.stage2") :
+  regenPhase === "stage4" ? t("summary.actions.stage4") : "";
+```
+
+**Step 3: 在 `isProcessing` 附近添加 regenStages 计算**
+
+在 `const isProcessing = ...` 之后添加：
+
+```typescript
+const REGEN_STAGES: Array<{ phase: RegeneratePhase; label: string }> = [
   { phase: "stage1", label: "文本清洗" },
   { phase: "stage2", label: "说话人整理" },
   { phase: "stage4", label: "生成总结" },
 ];
 
-const regenStageIndex = REGEN_STAGE_ORDER.findIndex((s) => s.phase === regenPhase);
+const activeRegenIdx = REGEN_STAGES.findIndex((s) => s.phase === regenPhase);
 
-const regenStages: StageItem[] = REGEN_STAGE_ORDER.map((s, i) => ({
+const regenStages: StageItem[] = REGEN_STAGES.map((s, i) => ({
   key: s.phase,
   label: s.label,
   status:
-    regenStageIndex < 0 || i < regenStageIndex
+    activeRegenIdx < 0 || i < activeRegenIdx
       ? "done"
-      : i === regenStageIndex
+      : i === activeRegenIdx
       ? "active"
       : "pending",
 }));
 ```
 
-**Step 4: 替换渲染逻辑**
+注意：`activeRegenIdx < 0` 表示 regenPhase 为 "idle" 或 "streaming"，此时 regenStages 不会被渲染（条件判断在 Step 4 中处理）。
 
-找到内容区域的条件渲染，将：
+**Step 4: 替换内容区域的阶段进度渲染**
+
+将：
+
 ```tsx
 {(regenPhase === "stage1" || regenPhase === "stage2" || regenPhase === "stage4") ? (
   <div className="flex items-center gap-2 px-4 py-12 text-sm text-muted-foreground">
@@ -231,6 +154,7 @@ const regenStages: StageItem[] = REGEN_STAGE_ORDER.map((s, i) => ({
 ```
 
 替换为：
+
 ```tsx
 {(regenPhase === "stage1" || regenPhase === "stage2" || regenPhase === "stage4") ? (
   <div className="px-4 py-4">
@@ -239,20 +163,52 @@ const regenStages: StageItem[] = REGEN_STAGE_ORDER.map((s, i) => ({
 ) : ...}
 ```
 
-**Step 5: 清理不再使用的变量**
+**Step 5: 类型检查**
 
-删除 `stageLabel` 变量（已不使用）：
-```typescript
-// 删除这段：
-const stageLabel =
-  regenPhase === "stage1" ? t("summary.actions.stage1") :
-  regenPhase === "stage2" ? t("summary.actions.stage2") :
-  regenPhase === "stage4" ? t("summary.actions.stage4") : "";
+```bash
+npx tsc --noEmit 2>&1 | tail -10
 ```
 
-检查 `t("summary.actions.stage1/2/4")` 是否仅在 `stageLabel` 中使用，确认可以安全删除。
+Expected: 无 error。
 
-**Step 6: 编译验证**
+**Step 6: Commit**
+
+```bash
+git add src/components/SummaryTab.tsx
+git commit -m "refactor(SummaryTab): replace single-line spinner with StageProgressList for regen progress"
+```
+
+---
+
+## Task 3: 清理废弃的 i18n key
+
+**Files:**
+- Modify: `src/i18n/locales/zh.ts`
+- Modify: `src/i18n/locales/en.ts`
+
+**Step 1: 确认 stage1/2/4 key 不再被使用**
+
+```bash
+grep -r "summary.actions.stage" src/
+```
+
+Expected: 只出现在 i18n 文件中，不出现在 .tsx/.ts 组件文件里（Task 2 已删除 stageLabel）。
+
+**Step 2: 删除 zh.ts 中的废弃 key**
+
+在 `src/i18n/locales/zh.ts` 的 `summary.actions` 对象中，删除：
+
+```typescript
+stage1: "正在清洗文本...",
+stage2: "正在整理说话人...",
+stage4: "正在生成摘要...",
+```
+
+**Step 3: 删除 en.ts 中的废弃 key**
+
+在 `src/i18n/locales/en.ts` 的 `summary.actions` 对象中，删除对应的 stage1/2/4 key（名称相同，值为英文）。
+
+**Step 4: 类型检查**
 
 ```bash
 npx tsc --noEmit 2>&1 | tail -5
@@ -260,40 +216,44 @@ npx tsc --noEmit 2>&1 | tail -5
 
 Expected: 无 error。
 
-**Step 7: Commit**
+**Step 5: Commit**
 
 ```bash
-git add src/components/SummaryTab.tsx
-git commit -m "refactor(SummaryTab): use StageProgressList for regen progress, show all stages"
+git add src/i18n/locales/zh.ts src/i18n/locales/en.ts
+git commit -m "chore(i18n): remove unused summary.actions.stage1/2/4 keys"
 ```
 
 ---
 
 ## Task 4: 手动验证
 
-**测试步骤：**
+**Step 1: 启动开发模式**
 
-1. 运行 `npm run tauri:dev`
+```bash
+npm run tauri:dev
+```
 
-2. **PipelineProgress 验证（首次处理）：**
-   - 录制一段音频并停止
-   - 观察处理进度：确认 6 个阶段以清单形式展示，样式与之前一致
-   - 完成后各阶段显示绿色 checkmark 和耗时
+**Step 2: SummaryTab 重新生成验证**
 
-3. **SummaryTab 重新生成验证：**
-   - 打开一个已有总结的会议，切换到"总结"Tab
-   - 点击重新生成按钮
-   - 观察内容区：应显示 3 阶段清单（文本清洗 / 说话人整理 / 生成总结），与 PipelineProgress 视觉风格一致
-   - 确认当前活跃阶段显示 spinner，已完成阶段显示 checkmark，待处理阶段显示空心圆
-   - 进入 streaming 阶段后，清单消失，流式文本接管内容区
+- 打开已有转写内容的会议，切换到「总结」Tab
+- 点击重新生成按钮
+- 观察内容区：应显示 3 行清单（文本清洗 / 说话人整理 / 生成总结）
+- 当前活跃阶段显示 spinner，已完成阶段显示绿色 checkmark，待处理阶段显示空心圆
+- 进入 streaming 阶段后，清单消失，流式文本接管内容区
+
+**Step 3: PipelineProgress 回归验证**
+
+- 录制新会议并停止
+- 确认 Pipeline 进度条功能完全不受影响（6 阶段、重试按钮、错误文本均正常）
 
 **验收标准：**
 
-- [ ] PipelineProgress 功能与外观不受影响
 - [ ] SummaryTab 重新生成进度从单行文字改为 3 阶段清单
-- [ ] 两处进度条视觉风格一致（字号、图标、颜色、容器样式）
+- [ ] 与 PipelineProgress 视觉风格一致（字号、图标大小、颜色、容器样式）
 - [ ] streaming 阶段正常切换到流式文本输出
+- [ ] PipelineProgress 功能与外观完全不受影响
 - [ ] TypeScript 无报错
+- [ ] i18n 无废弃 key
 
 ---
 
@@ -302,5 +262,9 @@ git commit -m "refactor(SummaryTab): use StageProgressList for regen progress, s
 | 文件 | Task | 变更类型 |
 |------|------|---------|
 | `src/components/StageProgressList.tsx` | Task 1 | 新建 |
-| `src/components/PipelineProgress.tsx` | Task 2 | 重构（使用共享组件） |
-| `src/components/SummaryTab.tsx` | Task 3 | 重构（进度展示升级） |
+| `src/components/SummaryTab.tsx` | Task 2 | 修改（进度展示升级） |
+| `src/i18n/locales/zh.ts` | Task 3 | 删除废弃 key |
+| `src/i18n/locales/en.ts` | Task 3 | 删除废弃 key |
+
+**不修改：**
+- `src/components/PipelineProgress.tsx`（已包含 failed 态 + 重试逻辑，远超 StageProgressList 能力）
