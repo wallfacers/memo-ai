@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, CheckCircle2, XCircle, Download } from "lucide-react";
 import {
   useGetMeeting,
   useGetTranscripts,
@@ -313,8 +314,13 @@ export function Meeting() {
         </TabsContent>
 
         <TabsContent value="report" className="flex-1 overflow-auto mt-4">
-          <div className="mb-3 flex justify-end">
-            <button
+          <div className="flex justify-start gap-1 px-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-md text-muted-foreground hover:text-foreground"
+              title={t("meeting.exportMd")}
+              disabled={!currentMeeting.report}
               onClick={async () => {
                 const filePath = await save({
                   defaultPath: `${currentMeeting.title ?? "report"}.md`,
@@ -328,13 +334,12 @@ export function Meeting() {
                   }
                 }
               }}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
-              {t("meeting.exportMd")}
-            </button>
+              <Download className="h-4 w-4" />
+            </Button>
           </div>
           {currentMeeting.report ? (
-            <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed text-foreground prose prose-sm max-w-none dark:prose-invert">
+            <div className="p-4 text-sm leading-relaxed text-foreground prose prose-sm max-w-none dark:prose-invert">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {currentMeeting.report}
               </ReactMarkdown>
