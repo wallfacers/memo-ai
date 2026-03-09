@@ -9,12 +9,42 @@ const CHUNK_SECS: u32 = 30;
 
 pub struct Qwen3AsrProvider {
     api_url: String,
+    model_name: String,
+    client: reqwest::blocking::Client,
 }
 
 impl Qwen3AsrProvider {
     pub fn new(api_url: &str) -> Self {
-        Qwen3AsrProvider {
-            api_url: api_url.trim_end_matches('/').to_string(),
+        let api_url = api_url.trim_end_matches('/').to_string();
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .build()
+            .unwrap_or_default();
+        let model_name = Self::resolve_model_name(&api_url, &client);
+        Qwen3AsrProvider { api_url, model_name, client }
+    }
+
+    fn resolve_model_name(api_url: &str, client: &reqwest::blocking::Client) -> String {
+        let url = format!("{}/v1/models", api_url);
+        match client.get(&url).send() {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(json) = resp.json::<serde_json::Value>() {
+                    if let Some(id) = json["data"][0]["id"].as_str() {
+                        log::info!("Qwen3-ASR: resolved model name: {}", id);
+                        return id.to_string();
+                    }
+                }
+                log::warn!("Qwen3-ASR: could not parse model name from /v1/models");
+                String::new()
+            }
+            Ok(resp) => {
+                log::warn!("Qwen3-ASR: /v1/models returned HTTP {}", resp.status());
+                String::new()
+            }
+            Err(e) => {
+                log::warn!("Qwen3-ASR: /v1/models query failed: {}", e);
+                String::new()
+            }
         }
     }
 
@@ -79,16 +109,15 @@ impl Qwen3AsrProvider {
             .mime_str("audio/wav")
             .map_err(|e| AppError::Asr(format!("Qwen3-ASR: multipart error: {}", e)))?;
 
-        let form = reqwest::blocking::multipart::Form::new()
-            .part("file", part)
-            .text("model", self.api_url.clone());
+        let form = if self.model_name.is_empty() {
+            reqwest::blocking::multipart::Form::new().part("file", part)
+        } else {
+            reqwest::blocking::multipart::Form::new()
+                .part("file", part)
+                .text("model", self.model_name.clone())
+        };
 
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
-            .build()
-            .map_err(|e| AppError::Asr(format!("Qwen3-ASR: client build error: {}", e)))?;
-
-        let resp = client
+        let resp = self.client
             .post(&endpoint)
             .multipart(form)
             .send()
@@ -129,9 +158,8 @@ impl AsrProvider for Qwen3AsrProvider {
         let mut segments = Vec::new();
 
         for (i, wav_bytes) in chunks.into_iter().enumerate() {
-            let start = (i as u32 * CHUNK_SECS) as f64;
-            let end = ((i as u32 + 1) * CHUNK_SECS) as f64;
-            let end = end.min(total_secs);
+            let start = i as f64 * CHUNK_SECS as f64;
+            let end = ((i + 1) as f64 * CHUNK_SECS as f64).min(total_secs);
 
             match self.transcribe_chunk(wav_bytes) {
                 Ok(text) if !text.is_empty() => {
