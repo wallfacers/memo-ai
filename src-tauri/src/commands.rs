@@ -1144,8 +1144,8 @@ pub fn start_funasr_session(
         }
     }
 
-    if !cfg.funasr_enabled {
-        return Ok(()); // 未启用，静默跳过
+    if !cfg.funasr_enabled || cfg.asr_provider != "funasr" {
+        return Ok(()); // 未启用或当前 provider 不是 funasr，静默跳过
     }
 
     let server = crate::process::FunAsrServer::start(
