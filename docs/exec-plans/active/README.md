@@ -4,28 +4,35 @@
 
 ## 命名规范
 
-文件名格式：`YYYY-MM-DD-{描述}.md`
+文件名格式：`NN-{描述}.md`（顺序编号，与已完成计划共享序列）
 
-示例：`2026-03-06-mvp-audio-pipeline.md`
+示例：`09-unified-stage-progress-style.md`
 
 ## 计划模板
 
 ```markdown
 # 计划标题
 
-## 目标
-本次计划要完成什么
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-## 任务列表
-- [ ] 任务 1
-- [ ] 任务 2
-- [x] 已完成任务
+**Goal:** 本次计划要完成什么
 
-## 完成标准
-如何判断本计划执行完毕
+**Architecture:** 方案简述
 
-## 相关文档
-- 链接到相关规格或设计文档
+**Tech Stack:** 相关技术栈
+
+---
+
+## Task 1: 任务名称
+
+**Files:**
+- Create/Modify: `路径`
+
+**Step 1: ...**
+
+**Step 2: 验证编译/类型检查**
+
+**Step 3: Commit**
 ```
 
 ---
@@ -34,4 +41,4 @@
 
 | 计划 | 目标 |
 |------|------|
-| [05-funasr-realtime-asr.md](./05-funasr-realtime-asr.md) | FunASR 实时录音转写集成 |
+| [09-unified-stage-progress-style.md](./09-unified-stage-progress-style.md) | 提取 StageProgressList 共享组件，统一 Pipeline 和 SummaryTab 两处进度条视觉风格 |
