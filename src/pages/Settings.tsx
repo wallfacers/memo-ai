@@ -303,6 +303,7 @@ export function Settings() {
               <SelectContent>
                 <SelectItem value="local_whisper">{t("settings.asr.localWhisper")}</SelectItem>
                 <SelectItem value="aliyun">{t("settings.asr.aliyunProvider")}</SelectItem>
+                <SelectItem value="qwen3_asr">{t("settings.asr.qwen3AsrProvider")}</SelectItem>
                 {/* FunASR 暂时禁用：效果不如 Whisper */}
                 {/* <SelectItem value="funasr">{t("settings.asr.funasrProvider")}</SelectItem> */}
               </SelectContent>
@@ -499,6 +500,25 @@ export function Settings() {
                     {asrTestResult.message}
                   </span>
                 )}
+              </div>
+            </>
+          )}
+
+          {/* Qwen3-ASR 面板 */}
+          {local.asr_provider === "qwen3_asr" && (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  {t("settings.asr.qwen3AsrUrl")}
+                </label>
+                <Input
+                  value={local.qwen3_asr_url}
+                  onChange={(e) => setLocal({ ...local, qwen3_asr_url: e.target.value })}
+                  placeholder={t("settings.asr.qwen3AsrUrlPlaceholder")}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {t("settings.asr.qwen3AsrUrlHint")}
+                </p>
               </div>
             </>
           )}
