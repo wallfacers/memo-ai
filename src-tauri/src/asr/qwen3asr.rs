@@ -82,19 +82,18 @@ impl Qwen3AsrProvider {
             let end = (offset + chunk_samples).min(total_samples);
             let chunk_slice = &all_samples[offset..end];
 
-            let buf: Vec<u8> = Vec::new();
-            let cursor = Cursor::new(buf);
-            let mut writer = WavWriter::new(cursor, spec)
-                .map_err(|e| AppError::Asr(format!("Qwen3-ASR: WAV writer error: {}", e)))?;
-
-            for &s in chunk_slice {
-                writer.write_sample(s)
-                    .map_err(|e| AppError::Asr(format!("Qwen3-ASR: WAV write sample error: {}", e)))?;
+            let mut buf = Cursor::new(Vec::<u8>::new());
+            {
+                let mut writer = WavWriter::new(&mut buf, spec)
+                    .map_err(|e| AppError::Asr(format!("Qwen3-ASR: WAV writer error: {}", e)))?;
+                for &s in chunk_slice {
+                    writer.write_sample(s)
+                        .map_err(|e| AppError::Asr(format!("Qwen3-ASR: WAV write sample error: {}", e)))?;
+                }
+                writer.finalize()
+                    .map_err(|e| AppError::Asr(format!("Qwen3-ASR: WAV finalize error: {}", e)))?;
             }
-            let cursor = writer.into_inner()
-                .map_err(|e| AppError::Asr(format!("Qwen3-ASR: WAV finalize error: {}", e)))?;
-
-            chunks.push(cursor.into_inner());
+            chunks.push(buf.into_inner());
             offset = end;
         }
 
