@@ -20,6 +20,9 @@ pub fn build_asr(config: &AppConfig) -> Box<dyn AsrProvider> {
             &config.aliyun_asr_access_key_secret,
             &config.language,
         )),
+        "qwen3_asr" => Box::new(super::qwen3asr::Qwen3AsrProvider::new(
+            &config.qwen3_asr_url,
+        )),
         _ => {
             if config.asr_provider != "local_whisper" {
                 log::warn!(
