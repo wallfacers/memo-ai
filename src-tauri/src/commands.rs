@@ -49,6 +49,8 @@ pub struct AppConfig {
     pub funasr_port: u16,
     #[serde(default)]
     pub funasr_enabled: bool,
+    #[serde(default = "default_qwen3_asr_url")]
+    pub qwen3_asr_url: String,
 }
 
 fn default_asr_provider() -> String {
@@ -56,6 +58,10 @@ fn default_asr_provider() -> String {
 }
 
 fn default_funasr_port() -> u16 { 10095 }
+
+fn default_qwen3_asr_url() -> String {
+    "http://localhost:8000".into()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmProviderConfig {
@@ -87,6 +93,7 @@ impl Default for AppConfig {
             funasr_server_path: String::new(),
             funasr_port: 10095,
             funasr_enabled: false,
+            qwen3_asr_url: "http://localhost:8000".into(),
         }
     }
 }
@@ -1063,6 +1070,23 @@ pub fn test_asr_connection(settings: AppConfig) -> Result<AsrTestResult, String>
             ) {
                 Ok(msg) => Ok(AsrTestResult { success: true, message: msg }),
                 Err(e) => Ok(AsrTestResult { success: false, message: e }),
+            }
+        }
+        "qwen3_asr" => {
+            let url = format!("{}/health", settings.qwen3_asr_url.trim_end_matches('/'));
+            match reqwest::blocking::get(&url) {
+                Ok(r) if r.status().is_success() => Ok(AsrTestResult {
+                    success: true,
+                    message: format!("Qwen3-ASR 连接成功（{}）", settings.qwen3_asr_url),
+                }),
+                Ok(r) => Ok(AsrTestResult {
+                    success: false,
+                    message: format!("Qwen3-ASR 返回 HTTP {}", r.status()),
+                }),
+                Err(e) => Ok(AsrTestResult {
+                    success: false,
+                    message: format!("Qwen3-ASR 连接失败：{}", e),
+                }),
             }
         }
         _ => Ok(AsrTestResult {
