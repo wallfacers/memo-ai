@@ -6,6 +6,7 @@ import { Pencil, Check, Copy, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useUpdateMeetingSummary, useRegenerateSummaryStream } from "@/hooks/useTauriCommands";
+import { StageProgressList, type StageItem } from "@/components/StageProgressList";
 import type { Meeting } from "@/types";
 
 interface SummaryTabProps {
@@ -152,10 +153,24 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
   const isRegenerating = regenPhase !== "idle";
   const hasSummary = !!meeting.summary;
 
-  const stageLabel =
-    regenPhase === "stage1" ? t("summary.actions.stage1") :
-    regenPhase === "stage2" ? t("summary.actions.stage2") :
-    regenPhase === "stage4" ? t("summary.actions.stage4") : "";
+  const REGEN_STAGES: Array<{ phase: RegeneratePhase; label: string }> = [
+    { phase: "stage1", label: "文本清洗" },
+    { phase: "stage2", label: "说话人整理" },
+    { phase: "stage4", label: "生成总结" },
+  ];
+
+  const activeRegenIdx = REGEN_STAGES.findIndex((s) => s.phase === regenPhase);
+
+  const regenStages: StageItem[] = REGEN_STAGES.map((s, i) => ({
+    key: s.phase,
+    label: s.label,
+    status:
+      activeRegenIdx < 0 || i < activeRegenIdx
+        ? "done"
+        : i === activeRegenIdx
+        ? "active"
+        : "pending",
+  }));
 
   return (
     <div className="flex flex-col gap-2">
@@ -209,9 +224,8 @@ export function SummaryTab({ meeting, onSummaryUpdated }: SummaryTabProps) {
 
       {/* 内容区域 */}
       {(regenPhase === "stage1" || regenPhase === "stage2" || regenPhase === "stage4") ? (
-        <div className="flex items-center gap-2 px-4 py-12 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-          <span>{stageLabel}</span>
+        <div className="px-4 py-4">
+          <StageProgressList stages={regenStages} title="重新生成中" />
         </div>
       ) : regenPhase === "streaming" ? (
         <div className="px-4 py-2 text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">
