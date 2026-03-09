@@ -25,6 +25,7 @@ const defaultSettings: AppSettings = {
   funasr_ws_url: "",
   funasr_server_path: "funasr-server",
   funasr_port: 10095,
+  qwen3_asr_url: "http://localhost:8000",
 };
 
 export const useSettingsStore = create<SettingsStore>((set) => ({

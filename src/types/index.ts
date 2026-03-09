@@ -52,7 +52,7 @@ export interface LlmProvider {
   api_key: string | null;
 }
 
-export type AsrProviderType = "local_whisper" | "aliyun" | "funasr";
+export type AsrProviderType = "local_whisper" | "aliyun" | "funasr" | "qwen3_asr";
 
 export interface AppSettings {
   llm_provider: LlmProvider;
@@ -68,6 +68,7 @@ export interface AppSettings {
   funasr_ws_url: string;
   funasr_server_path: string;
   funasr_port: number;
+  qwen3_asr_url: string;
 }
 
 export type RecordingPhase =
